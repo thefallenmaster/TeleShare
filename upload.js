@@ -115,7 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const formData = new FormData();
         formData.append('chat_id', CONFIG.TELEGRAM_CHAT_ID);
-        formData.append('document', fileToUpload, 'encrypted_file.dat');
+        formData.append('document', fileToUpload, `${selectedFile.name}.enc`);
         
         const url = `${CONFIG.TELEGRAM_API_BASE}/bot${CONFIG.TELEGRAM_BOT_TOKEN}/sendDocument`;
         
@@ -154,6 +154,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     // Success
                     const fileId = res.result.document.file_id;
                     const messageId = res.result.message_id;
+
+                    // Edit the message caption to include the file ID and metadata
+                    const editUrl = `${CONFIG.TELEGRAM_API_BASE}/bot${CONFIG.TELEGRAM_BOT_TOKEN}/editMessageCaption`;
+                    const editFormData = new FormData();
+                    editFormData.append('chat_id', CONFIG.TELEGRAM_CHAT_ID);
+                    editFormData.append('message_id', messageId);
+                    editFormData.append('caption', `File ID: ${fileId}\nName: ${selectedFile.name}\nSize: ${formatBytes(selectedFile.size)}`);
+                    
+                    fetch(editUrl, {
+                        method: 'POST',
+                        body: editFormData
+                    }).then(r => r.json()).then(data => {
+                        console.log('Caption updated:', data);
+                    }).catch(err => console.error('Failed to update caption:', err));
 
                     const uploadStatus = document.getElementById('upload-status');
                     if (supabaseClient) {
@@ -215,7 +229,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         shareLinkInput.value = finalUrl;
-        emailBtn.href = `mailto:?subject=File shared via SkyShare&body=I've shared a file with you. Download it here: ${finalUrl}`;
+        emailBtn.href = `mailto:?subject=File shared via TeleShare&body=I've shared a file with you. Download it here: ${finalUrl}`;
         progressContainer.classList.add('hidden');
         shareContainer.classList.remove('hidden');
     }

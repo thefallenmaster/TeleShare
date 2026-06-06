@@ -57,17 +57,33 @@ function copyToClipboard(text) {
     });
 }
 
-// Configuration for Telegram Bot API and Supabase
+// Configuration for Telegram Bot API and Supabase (Decrypted at runtime)
+const OBFUSCATION_KEY = 'skyshare-secret-key-2026';
+function decryptConfigValue(encodedText) {
+    if (!encodedText || encodedText === 'YOUR_TELEGRAM_BOT_TOKEN' || encodedText === 'YOUR_SUPABASE_URL' || encodedText === 'YOUR_SUPABASE_ANON_KEY') {
+        return encodedText;
+    }
+    try {
+        const raw = atob(encodedText);
+        let decoded = "";
+        for (let i = 0; i < raw.length; i++) {
+            decoded += String.fromCharCode(raw.charCodeAt(i) ^ OBFUSCATION_KEY.charCodeAt(i % OBFUSCATION_KEY.length));
+        }
+        return decoded;
+    } catch (e) {
+        console.error('Decryption failed for config value:', e);
+        return encodedText;
+    }
+}
+
 const CONFIG = {
-    TELEGRAM_BOT_TOKEN: '8696168616:AAEFe0U1D9WF7gqtBrTdypTBBRBYvebeKag', // Replace with your bot token
-    TELEGRAM_CHAT_ID: '@testrjrjpgb', // Replace with your channel username (e.g. @mychannel) or ID
+    TELEGRAM_BOT_TOKEN: decryptConfigValue('S11ARVlXSlMcRV8iMyAySFswSGkLZ3QBFBoNMRo1FhxdJychICctWw4HHGZTVw=='),
+    TELEGRAM_CHAT_ID: decryptConfigValue('Mx8cABwTGBdHAwIB'),
     TELEGRAM_API_BASE: 'https://api.telegram.org', // Change to your local Bot API server URL for 2GB support
-    // Telegram's public /file/ endpoint does NOT support CORS. You must use a proxy for browser downloads!
-    CORS_PROXY: 'https://corsproxy.io/?', // e.g. 'https://corsproxy.io/?' (Leave empty '' if your local server adds CORS headers)
 
     // Supabase Credentials
-    SUPABASE_URL: 'https://bkzdzwoxofwyadqqqdgz.supabase.co', // Replace with your Supabase URL
-    SUPABASE_ANON_KEY: 'sb_publishable_VXUUKPGLA-6wxSGnepPiCg_gYp-3z75' // Replace with your Supabase Anon Key
+    SUPABASE_URL: decryptConfigValue('Gx8NAxtbXUpPGB8HCBIbVQQDDlRTVENHAg8eCUYSBxVMEQQQF0sXQg=='),
+    SUPABASE_ANON_KEY: decryptConfigValue('AAkmAx0DHgxeGwQBHgArezMwLGZid353Xl0OCzsmHABdIwwgFToTdBtISlcFBQ==')
 };
 
 // Initialize Supabase Client if credentials are provided

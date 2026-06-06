@@ -86,11 +86,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 dlUploadDate.textContent = new Date(data.created_at).toLocaleDateString();
                 dlDownloadCount.textContent = '1';
 
-                // Check size limit: Telegram Bot API has 20MB limit for getFile
-                const MAX_BOT_DL_SIZE = 20 * 1024 * 1024;
-                if (fileSize > MAX_BOT_DL_SIZE) {
-                    showTelegramFallback();
-                } else if (CONFIG.TELEGRAM_BOT_TOKEN === 'YOUR_TELEGRAM_BOT_TOKEN' || telegramFileId.startsWith('mock_file_id')) {
+                if (CONFIG.TELEGRAM_BOT_TOKEN === 'YOUR_TELEGRAM_BOT_TOKEN' || (telegramFileId && telegramFileId.startsWith('mock_file_id'))) {
                     mockMetadata();
                 } else {
                     await fetchTelegramMetadataDirectly();
@@ -113,8 +109,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             const data = await response.json();
             
             if (!data.ok) {
-                console.warn('Bot API getFile failed or file too large. Falling back to Telegram Channel download.');
-                showTelegramFallback();
+                console.error('Bot API getFile failed:', data.description);
+                showNotification('Failed to fetch file info: ' + data.description);
+                if (!fileSize) {
+                    dlFileName.textContent = 'Encrypted File';
+                    dlFileSize.textContent = 'Unknown';
+                    dlUploadDate.textContent = 'Unknown';
+                    dlDownloadCount.textContent = '1';
+                }
+                loadingState.classList.add('hidden');
+                fileReadyState.classList.remove('hidden');
                 return;
             }
             
@@ -123,16 +127,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             // If metadata wasn't loaded from Supabase, update placeholders
             if (!fileSize) {
-                dlFileName.textContent = 'Encrypted File (Decrypting to view)';
+                dlFileName.textContent = 'Secure Encrypted File';
                 dlFileSize.textContent = formatBytes(telegramFile.file_size);
-                dlUploadDate.textContent = 'Unknown';
+                dlUploadDate.textContent = new Date().toLocaleDateString();
                 dlDownloadCount.textContent = '1';
             }
 
-            startDecryption(directFilePath);
+            loadingState.classList.add('hidden');
+            fileReadyState.classList.remove('hidden');
         } catch (e) {
             console.error('Failed to query getFile directly:', e);
-            showTelegramFallback();
+            showNotification('Error loading file metadata.');
+            loadingState.classList.add('hidden');
+            fileReadyState.classList.remove('hidden');
         }
     }
 
@@ -143,7 +150,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         dlDownloadCount.textContent = Math.floor(Math.random() * 100);
         
         directFilePath = 'mock';
-        startDecryption(directFilePath);
+        loadingState.classList.add('hidden');
+        fileReadyState.classList.remove('hidden');
     }
 
     function showTelegramFallback() {
@@ -163,28 +171,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async function startDecryption(fileUrl) {
-        loadingState.classList.add('hidden');
-        decryptingState.classList.remove('hidden');
+        // Change download button state to loading
+        const originalBtnContent = downloadBtn.innerHTML;
+        downloadBtn.disabled = true;
+        downloadBtn.innerHTML = `<div class="spinner-sm"></div> Downloading & Decrypting...`;
 
         try {
             let encryptedBlob;
             if (fileUrl === 'mock') {
                 // Mock encrypted blob and wait a bit
-                await new Promise(r => setTimeout(r, 1000));
+                await new Promise(r => setTimeout(r, 1500));
                 fileData = new Blob(["Mock Decrypted Content"], {type: 'text/plain'});
                 originalFileName = 'mock_file.txt';
                 originalMimeType = 'text/plain';
             } else {
-                // Fetch the encrypted file from Telegram (via CORS proxy if configured)
-                const fetchUrl = CONFIG.CORS_PROXY ? `${CONFIG.CORS_PROXY}${encodeURIComponent(fileUrl)}` : fileUrl;
                 let response;
                 try {
-                    response = await fetch(fetchUrl);
+                    response = await fetch(fileUrl);
                     if (!response.ok) throw new Error('Proxy returned non-OK status: ' + response.status);
                     encryptedBlob = await response.blob();
                 } catch (fetchErr) {
-                    console.warn('Direct file download failed via proxy. Showing Telegram channel fallback.', fetchErr);
-                    showTelegramFallback();
+                    console.error('Direct file download failed:', fetchErr);
+                    showNotification('Download failed. Could not fetch file from Telegram.');
+                    downloadBtn.disabled = false;
+                    downloadBtn.innerHTML = originalBtnContent;
                     return;
                 }
                 
@@ -195,33 +205,41 @@ document.addEventListener('DOMContentLoaded', async () => {
                 try {
                     const decryptedData = await decryptFile(encryptedBlob, cryptoKey);
                     fileData = decryptedData.blob;
-                    originalFileName = decryptedData.metadata.name || 'secure_file_skyshare';
+                    originalFileName = decryptedData.metadata.name || 'secure_file_teleshare';
                     originalMimeType = decryptedData.metadata.type || 'application/octet-stream';
                 } catch (decryptErr) {
                     console.error('Decryption failed. The key might be invalid.', decryptErr);
                     showNotification('Failed to decrypt. Link might be invalid.');
-                    decryptingState.classList.add('hidden');
-                    errorState.classList.remove('hidden');
+                    downloadBtn.disabled = false;
+                    downloadBtn.innerHTML = originalBtnContent;
                     return;
                 }
             }
             
             // Update UI with decrypted info
-            decryptingState.classList.add('hidden');
-            fileReadyState.classList.remove('hidden');
-            
             dlFileName.textContent = originalFileName;
-            if (fileUrl !== 'mock') {
-                dlFileSize.textContent = formatBytes(fileData.size);
-            }
+            dlFileSize.textContent = formatBytes(fileData.size);
             
             const objUrl = URL.createObjectURL(fileData);
             setupPreview(objUrl, originalMimeType, originalFileName, true);
 
+            // Trigger download directly
+            triggerDownload(objUrl, originalFileName);
+
+            // Restore button
+            downloadBtn.disabled = false;
+            downloadBtn.innerHTML = originalBtnContent;
+
+            // Increment download count locally for UI feedback
+            const currentCount = parseInt(dlDownloadCount.textContent) || 0;
+            dlDownloadCount.textContent = (currentCount + 1).toString();
+
+            showNotification('File downloaded and decrypted successfully!');
         } catch (e) {
             console.error('Unexpected error during decryption flow:', e);
-            decryptingState.classList.add('hidden');
-            errorState.classList.remove('hidden');
+            showNotification('An unexpected error occurred.');
+            downloadBtn.disabled = false;
+            downloadBtn.innerHTML = originalBtnContent;
         }
     }
 
@@ -235,6 +253,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (fileData) {
             const url = URL.createObjectURL(fileData);
             triggerDownload(url, originalFileName);
+        } else if (directFilePath) {
+            startDecryption(directFilePath);
         }
     });
 
