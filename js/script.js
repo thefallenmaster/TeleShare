@@ -81,8 +81,8 @@ const CONFIG = {
     TELEGRAM_CHAT_ID: decryptConfigValue('Mx8cABwTGBdHAwIB'),
     TELEGRAM_API_BASE: 'https://api.telegram.org', // Change to your local Bot API server URL for 2GB support
     CORS_PROXY: (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || !window.location.hostname)
-        ? 'http://localhost:8081/'
-        : '/api/proxy/',
+        ? 'http://localhost:8081/?url='
+        : '/api/proxy?url=',
     STREAM_API: (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || !window.location.hostname)
         ? 'http://localhost:8081/api/stream'
         : '/api/stream',

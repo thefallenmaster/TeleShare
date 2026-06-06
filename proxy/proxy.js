@@ -87,8 +87,16 @@ http.createServer(async (req, res) => {
     }
 
     // Standard Proxy Logic
-    const targetUrl = decodeURIComponent(req.url.substring(1));
-    if (!targetUrl.startsWith('http')) {
+    let targetUrl = parsedUrl.query.url;
+    if (!targetUrl) {
+        const cleanPath = req.url.replace(/^\//, '');
+        targetUrl = decodeURIComponent(cleanPath);
+    }
+    if (targetUrl) {
+        targetUrl = targetUrl.replace(/^(https?):\/([^\/])/, '$1://$2');
+    }
+
+    if (!targetUrl || !targetUrl.startsWith('http')) {
         res.writeHead(400);
         res.end(JSON.stringify({ error: 'Invalid target URL. Must start with http.' }));
         return;

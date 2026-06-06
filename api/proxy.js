@@ -15,8 +15,17 @@ export default async function handler(req, res) {
     }
 
     // Extract target URL
-    const targetUrl = decodeURIComponent(req.url.replace('/api/proxy/', ''));
-    if (!targetUrl.startsWith('http')) {
+    const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    let targetUrl = parsedUrl.searchParams.get('url');
+    if (!targetUrl) {
+        const cleanPath = req.url.replace(/^\/api\/proxy\/?/, '').replace(/^\//, '');
+        targetUrl = decodeURIComponent(cleanPath);
+    }
+    if (targetUrl) {
+        targetUrl = targetUrl.replace(/^(https?):\/([^\/])/, '$1://$2');
+    }
+
+    if (!targetUrl || !targetUrl.startsWith('http')) {
         return res.status(400).json({ error: 'Invalid target URL. Must start with http.' });
     }
 
