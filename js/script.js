@@ -80,8 +80,7 @@ const CONFIG = {
     TELEGRAM_BOT_TOKEN: decryptConfigValue('S11ARVlXSlMcRV8iMyAySFswSGkLZ3QBFBoNMRo1FhxdJychICctWw4HHGZTVw=='),
     TELEGRAM_CHAT_ID: decryptConfigValue('Mx8cABwTGBdHAwIB'),
     TELEGRAM_API_BASE: 'https://api.telegram.org', // Change to your local Bot API server URL for 2GB support
-    // Telegram's public /file/ endpoint does NOT support CORS. You must use a proxy for browser downloads!
-    CORS_PROXY: (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    CORS_PROXY: (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || !window.location.hostname)
         ? 'http://localhost:8081/'
         : 'https://corsproxy.io/?',
 
