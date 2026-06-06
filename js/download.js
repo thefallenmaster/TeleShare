@@ -137,7 +137,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             if (!data.ok) {
                 console.error('Bot API getFile failed:', data.description);
-                showNotification('Failed to fetch file info: ' + data.description);
+                
+                // Fallback to our proxy MTProto streaming endpoint for large files
+                if (data.description && data.description.includes('too big')) {
+                    console.log('File >20MB. Falling back to proxy MTProto stream.');
+                    directFilePath = `${CONFIG.STREAM_API}?msg_id=${telegramMessageId}&chat_id=${encodeURIComponent(CONFIG.TELEGRAM_CHAT_ID)}&bot_token=${encodeURIComponent(CONFIG.TELEGRAM_BOT_TOKEN)}`;
+                } else {
+                    showNotification('Failed to fetch file info: ' + data.description);
+                }
+                
                 if (!fileSize) {
                     dlFileName.textContent = 'Encrypted File';
                     dlFileSize.textContent = 'Unknown';

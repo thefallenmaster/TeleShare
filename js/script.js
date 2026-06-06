@@ -82,7 +82,10 @@ const CONFIG = {
     TELEGRAM_API_BASE: 'https://api.telegram.org', // Change to your local Bot API server URL for 2GB support
     CORS_PROXY: (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || !window.location.hostname)
         ? 'http://localhost:8081/'
-        : 'https://corsproxy.io/?',
+        : '/api/proxy/',
+    STREAM_API: (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || !window.location.hostname)
+        ? 'http://localhost:8081/api/stream'
+        : '/api/stream',
 
     // Supabase Credentials
     SUPABASE_URL: decryptConfigValue('Gx8NAxtbXUpPGB8HCBIbVQQDDlRTVENHAg8eCUYSBxVMEQQQF0sXQg=='),
