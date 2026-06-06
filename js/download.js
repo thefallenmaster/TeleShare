@@ -105,7 +105,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function fetchTelegramMetadataDirectly() {
         try {
             const getFileUrl = `${CONFIG.TELEGRAM_API_BASE}/bot${CONFIG.TELEGRAM_BOT_TOKEN}/getFile?file_id=${telegramFileId}`;
-            const response = await fetch(getFileUrl);
+            const fetchUrl = CONFIG.CORS_PROXY ? `${CONFIG.CORS_PROXY}${encodeURIComponent(getFileUrl)}` : getFileUrl;
+            const response = await fetch(fetchUrl);
             const data = await response.json();
             
             if (!data.ok) {
@@ -185,9 +186,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 originalFileName = 'mock_file.txt';
                 originalMimeType = 'text/plain';
             } else {
+                // Fetch the encrypted file from Telegram (via AllOrigins if using corsproxy.io due to content-type blocking)
+                let fetchUrl = fileUrl;
+                if (CONFIG.CORS_PROXY) {
+                    if (CONFIG.CORS_PROXY.includes('corsproxy.io')) {
+                        fetchUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(fileUrl)}`;
+                    } else {
+                        fetchUrl = `${CONFIG.CORS_PROXY}${encodeURIComponent(fileUrl)}`;
+                    }
+                }
                 let response;
                 try {
-                    response = await fetch(fileUrl);
+                    response = await fetch(fetchUrl);
                     if (!response.ok) throw new Error('Proxy returned non-OK status: ' + response.status);
                     encryptedBlob = await response.blob();
                 } catch (fetchErr) {

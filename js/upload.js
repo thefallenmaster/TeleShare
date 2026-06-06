@@ -118,6 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
         formData.append('document', fileToUpload, `${selectedFile.name}.enc`);
         
         const url = `${CONFIG.TELEGRAM_API_BASE}/bot${CONFIG.TELEGRAM_BOT_TOKEN}/sendDocument`;
+        const uploadUrl = CONFIG.CORS_PROXY ? `${CONFIG.CORS_PROXY}${encodeURIComponent(url)}` : url;
         
         const xhr = new XMLHttpRequest();
         let startTime = Date.now();
@@ -157,12 +158,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Edit the message caption to include the file ID and metadata
                     const editUrl = `${CONFIG.TELEGRAM_API_BASE}/bot${CONFIG.TELEGRAM_BOT_TOKEN}/editMessageCaption`;
+                    const proxiedEditUrl = CONFIG.CORS_PROXY ? `${CONFIG.CORS_PROXY}${encodeURIComponent(editUrl)}` : editUrl;
                     const editFormData = new FormData();
                     editFormData.append('chat_id', CONFIG.TELEGRAM_CHAT_ID);
                     editFormData.append('message_id', messageId);
                     editFormData.append('caption', `File ID: ${fileId}\nName: ${selectedFile.name}\nSize: ${formatBytes(selectedFile.size)}`);
                     
-                    fetch(editUrl, {
+                    fetch(proxiedEditUrl, {
                         method: 'POST',
                         body: editFormData
                     }).then(r => r.json()).then(data => {
@@ -212,7 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        xhr.open('POST', url, true);
+        xhr.open('POST', uploadUrl, true);
         xhr.send(formData);
     });
 
