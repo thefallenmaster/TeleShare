@@ -129,55 +129,83 @@ document.addEventListener('DOMContentLoaded', () => {
 
         console.log('Uploading to:', uploadUrl);
 
-        // Use fetch() instead of XHR for better CORS preflight and streaming proxy compatibility
-        let response;
-        try {
-            response = await fetch(uploadUrl, {
-                method: 'POST',
-                body: formData
-            });
-        } catch (netErr) {
-            console.error('Fetch network error:', netErr);
-            const isProxyLocal = uploadUrl.startsWith('http://localhost:8081');
-            if (isProxyLocal) {
-                handleUploadError('Cannot reach local proxy at http://localhost:8081. Make sure you run: node proxy/proxy.js');
-            } else {
-                handleUploadError('Network error: ' + (netErr.message || 'Could not connect to upload server.'));
-            }
-            return;
-        }
-
-        if (!response.ok) {
-            const text = await response.text().catch(() => '');
-            handleUploadError(`Upload failed (HTTP ${response.status}): ${text || response.statusText}`);
-            return;
-        }
-
+        // ── XHR upload (only API that gives real per-chunk progress events) ──
         let res;
         try {
-            res = await response.json();
-        } catch (jsonErr) {
-            handleUploadError('Server returned invalid JSON response.');
+            res = await new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                let lastTime     = Date.now();
+                let lastLoaded   = 0;
+
+                xhr.upload.addEventListener('progress', (e) => {
+                    if (!e.lengthComputable) return;
+
+                    const pct = (e.loaded / e.total) * 100;
+                    progressBar.style.width       = pct + '%';
+                    uploadPercentage.textContent  = Math.round(pct) + '%';
+
+                    const now     = Date.now();
+                    const dtSec   = (now - lastTime) / 1000;
+                    if (dtSec >= 0.25) {
+                        const speed = (e.loaded - lastLoaded) / dtSec;  // bytes/s
+                        uploadSpeedEl.textContent    = formatBytes(speed) + '/s';
+                        uploadTimeLeftEl.textContent = speed > 0
+                            ? formatTime((e.total - e.loaded) / speed)
+                            : 'Calculating...';
+                        lastTime   = now;
+                        lastLoaded = e.loaded;
+                    }
+                });
+
+                xhr.addEventListener('load', () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            resolve(JSON.parse(xhr.responseText));
+                        } catch {
+                            reject(new Error('Server returned invalid JSON.'));
+                        }
+                    } else {
+                        reject(new Error(`HTTP ${xhr.status}: ${xhr.responseText || xhr.statusText}`));
+                    }
+                });
+
+                xhr.addEventListener('error', () => {
+                    const isProxy = uploadUrl.startsWith('http://localhost:8081');
+                    reject(new Error(
+                        isProxy
+                            ? 'Cannot reach proxy at localhost:8081. Make sure you run: node proxy/proxy.js'
+                            : 'Network error during upload. Check your internet connection.'
+                    ));
+                });
+
+                xhr.addEventListener('abort', () => reject(new Error('Upload was cancelled.')));
+
+                xhr.open('POST', uploadUrl, true);
+                xhr.send(formData);
+            });
+        } catch (xhrErr) {
+            console.error('XHR upload error:', xhrErr);
+            handleUploadError(xhrErr.message);
             return;
         }
 
-        // Simulate progress bar to 100% (fetch doesn't expose upload progress directly)
-        progressBar.style.width = '100%';
+        // Final bar fill after XHR resolves
+        progressBar.style.width      = '100%';
         uploadPercentage.textContent = '100%';
-        uploadSpeedEl.textContent = 'Done';
+        uploadSpeedEl.textContent    = 'Done';
         uploadTimeLeftEl.textContent = 'Processing...';
 
         if (res.ok) {
-            const fileId = res.result.document.file_id;
+            const fileId    = res.result.document.file_id;
             const messageId = res.result.message_id;
 
             // Edit the message caption to include the file ID and metadata
-            const editUrl = `${CONFIG.TELEGRAM_API_BASE}/bot${CONFIG.TELEGRAM_BOT_TOKEN}/editMessageCaption`;
+            const editUrl       = `${CONFIG.TELEGRAM_API_BASE}/bot${CONFIG.TELEGRAM_BOT_TOKEN}/editMessageCaption`;
             const proxiedEditUrl = CONFIG.CORS_PROXY ? `${CONFIG.CORS_PROXY}${encodeURIComponent(editUrl)}` : editUrl;
-            const editFormData = new FormData();
-            editFormData.append('chat_id', CONFIG.TELEGRAM_CHAT_ID);
+            const editFormData  = new FormData();
+            editFormData.append('chat_id',    CONFIG.TELEGRAM_CHAT_ID);
             editFormData.append('message_id', messageId);
-            editFormData.append('caption', `File ID: ${fileId}\nName: ${selectedFile.name}\nSize: ${formatBytes(selectedFile.size)}`);
+            editFormData.append('caption',    `File ID: ${fileId}\nName: ${selectedFile.name}\nSize: ${formatBytes(selectedFile.size)}`);
 
             fetch(proxiedEditUrl, { method: 'POST', body: editFormData })
                 .then(r => r.json())
@@ -188,11 +216,11 @@ document.addEventListener('DOMContentLoaded', () => {
             if (supabaseClient) {
                 if (uploadStatus) uploadStatus.textContent = 'Saving details to database...';
                 supabaseClient.from('skyshare_files').insert([{
-                    telegram_file_id: fileId,
+                    telegram_file_id:   fileId,
                     telegram_message_id: messageId,
-                    file_name: selectedFile.name,
-                    file_size: selectedFile.size,
-                    mime_type: selectedFile.type
+                    file_name:  selectedFile.name,
+                    file_size:  selectedFile.size,
+                    mime_type:  selectedFile.type
                 }]).select().then(({ data, error }) => {
                     if (error || !data || data.length === 0) {
                         console.error('Supabase save error:', error);
@@ -210,6 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             handleUploadError(res.description || 'Telegram API returned an error.');
         }
+
     });
 
     function generateShareLink(fileId, messageId, exportedKey, supabaseId = null) {
