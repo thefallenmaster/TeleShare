@@ -116,42 +116,6 @@
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                     Download File
                 </button>
-
-                <div id="telegram-download-container" class="telegram-download-container hidden mt-4">
-                    <div class="info-alert">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                        <span>Direct download is unavailable for files larger than 20MB. Follow these steps:</span>
-                    </div>
-                    
-                    <div class="steps-list">
-                        <div class="step-item">
-                            <span class="step-number">1</span>
-                            <div class="step-content">
-                                <p>Download the encrypted file from our Telegram channel.</p>
-                                <a id="telegram-link-btn" href="#" target="_blank" class="btn btn-outline btn-block mt-2">
-                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 2-7 20-4-9-9-4Z"></path><path d="M22 2 11 13"></path></svg>
-                                    View in Telegram Channel
-                                </a>
-                            </div>
-                        </div>
-                        
-                        <div class="step-item mt-4">
-                            <span class="step-number">2</span>
-                            <div class="step-content">
-                                <p>Decrypt the downloaded file (usually named <code>encrypted_file.dat</code>) by dragging it below or browsing.</p>
-                                <div id="decrypt-dropzone" class="dropzone decrypt-dropzone mt-2">
-                                    <input type="file" id="decrypt-file-input" class="file-input" hidden>
-                                    <div class="drop-content">
-                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                                        <h4>Drop encrypted file here to decrypt</h4>
-                                        <p>or</p>
-                                        <button class="btn btn-sm btn-primary" onclick="document.getElementById('decrypt-file-input').click()">Browse File</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
             </div>
         </section>
     </main>

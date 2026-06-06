@@ -123,12 +123,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             if (!data.ok) {
                 console.error('Bot API getFile failed:', data.description);
-                if (data.description && data.description.includes('too big')) {
-                    console.log('Bot API reported file is too big. Showing Telegram fallback.');
-                    showTelegramFallback();
-                    return;
-                }
-                
                 showNotification('Failed to fetch file info: ' + data.description);
                 if (!fileSize) {
                     dlFileName.textContent = 'Encrypted File';
@@ -171,22 +165,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         directFilePath = 'mock';
         loadingState.classList.add('hidden');
         fileReadyState.classList.remove('hidden');
-    }
-
-    function showTelegramFallback() {
-        loadingState.classList.add('hidden');
-        decryptingState.classList.add('hidden');
-        fileReadyState.classList.remove('hidden');
-        downloadBtn.classList.add('hidden'); // Hide direct download button
-        
-        const telegramDownloadContainer = document.getElementById('telegram-download-container');
-        const telegramLinkBtn = document.getElementById('telegram-link-btn');
-        
-        if (telegramDownloadContainer && telegramLinkBtn) {
-            const tLink = getTelegramMessageLink(CONFIG.TELEGRAM_CHAT_ID, telegramMessageId);
-            telegramLinkBtn.href = tLink;
-            telegramDownloadContainer.classList.remove('hidden');
-        }
     }
 
     // ── Progress panel helpers ──────────────────────────────────────────────
@@ -447,93 +425,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.body.removeChild(a);
     }
 
-    // Setup Local Decryption Drag-and-Drop / Browse fallback
-    const decryptDropzone = document.getElementById('decrypt-dropzone');
-    const decryptFileInput = document.getElementById('decrypt-file-input');
 
-    if (decryptDropzone) {
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            decryptDropzone.addEventListener(eventName, preventDefaults, false);
-        });
-
-        ['dragenter', 'dragover'].forEach(eventName => {
-            decryptDropzone.addEventListener(eventName, () => decryptDropzone.classList.add('dragover'), false);
-        });
-
-        ['dragleave', 'drop'].forEach(eventName => {
-            decryptDropzone.addEventListener(eventName, () => decryptDropzone.classList.remove('dragover'), false);
-        });
-
-        decryptDropzone.addEventListener('drop', handleDecryptDrop, false);
-    }
-
-    if (decryptFileInput) {
-        decryptFileInput.addEventListener('change', handleDecryptFileSelect, false);
-    }
-
-    function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
-    }
-
-    function handleDecryptDrop(e) {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        if (files.length > 0) {
-            processEncryptedFile(files[0]);
-        }
-    }
-
-    function handleDecryptFileSelect(e) {
-        const files = e.target.files;
-        if (files.length > 0) {
-            processEncryptedFile(files[0]);
-        }
-    }
-
-    async function processEncryptedFile(file) {
-        try {
-            // Hide ready state / container, show decrypting state
-            fileReadyState.classList.add('hidden');
-            decryptingState.classList.remove('hidden');
-
-            const cryptoKey = await importKeyFromBase64(keyHash);
-            
-            // Decrypt the file
-            const decryptedData = await decryptFile(file, cryptoKey);
-            fileData = decryptedData.blob;
-            
-            // If the metadata in the encrypted file matches what we expect or we override it
-            const decryptedFileName = decryptedData.metadata.name || originalFileName;
-            const decryptedMimeType = decryptedData.metadata.type || originalMimeType;
-
-            // Hide decrypting state, show file ready state
-            decryptingState.classList.add('hidden');
-            fileReadyState.classList.remove('hidden');
-            
-            // Update the UI
-            dlFileName.textContent = decryptedFileName;
-            dlFileSize.textContent = formatBytes(fileData.size);
-            
-            // Hide the telegram-download-container, show the direct download-btn
-            document.getElementById('telegram-download-container').classList.add('hidden');
-            downloadBtn.classList.remove('hidden');
-
-            // Trigger the download automatically
-            const objUrl = URL.createObjectURL(fileData);
-            triggerDownload(objUrl, decryptedFileName);
-            
-            // Setup preview
-            setupPreview(objUrl, decryptedMimeType, decryptedFileName, true);
-
-            showNotification('File decrypted successfully!');
-        } catch (error) {
-            console.error('Local decryption failed:', error);
-            showNotification('Failed to decrypt. Please check if it is the correct encrypted file and link.');
-            decryptingState.classList.add('hidden');
-            fileReadyState.classList.remove('hidden');
-        }
-    }
 
     function setupPreview(url, mimeType, filename, isBlob = false) {
         if (mimeType.startsWith('image/')) {

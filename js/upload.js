@@ -205,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const editFormData  = new FormData();
             editFormData.append('chat_id',    CONFIG.TELEGRAM_CHAT_ID);
             editFormData.append('message_id', messageId);
-            editFormData.append('caption',    `File ID: ${fileId}\nName: ${selectedFile.name}\nSize: ${formatBytes(selectedFile.size)}`);
+            editFormData.append('caption',    `File ID: ${fileId}\nSize: ${formatBytes(selectedFile.size)}\nUpload Date: ${new Date().toLocaleDateString()}`);
 
             fetch(proxiedEditUrl, { method: 'POST', body: editFormData })
                 .then(r => r.json())
