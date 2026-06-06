@@ -86,6 +86,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 dlUploadDate.textContent = new Date(data.created_at).toLocaleDateString();
                 dlDownloadCount.textContent = '1';
 
+                if (fileSize > 20 * 1024 * 1024) {
+                    console.log('File size is >20MB. Using Telegram download fallback.');
+                    showTelegramFallback();
+                    return;
+                }
+
                 if (CONFIG.TELEGRAM_BOT_TOKEN === 'YOUR_TELEGRAM_BOT_TOKEN' || (telegramFileId && telegramFileId.startsWith('mock_file_id'))) {
                     mockMetadata();
                 } else {
@@ -106,11 +112,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             const getFileUrl = `${CONFIG.TELEGRAM_API_BASE}/bot${CONFIG.TELEGRAM_BOT_TOKEN}/getFile?file_id=${telegramFileId}`;
             const fetchUrl = CONFIG.CORS_PROXY ? `${CONFIG.CORS_PROXY}${encodeURIComponent(getFileUrl)}` : getFileUrl;
+            
             const response = await fetch(fetchUrl);
-            const data = await response.json();
+            const responseText = await response.text();
+            
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (jsonErr) {
+                console.error('Failed to parse JSON response from proxy:', responseText);
+                showNotification('Proxy server returned an invalid response.');
+                loadingState.classList.add('hidden');
+                fileReadyState.classList.remove('hidden');
+                return;
+            }
             
             if (!data.ok) {
                 console.error('Bot API getFile failed:', data.description);
+                if (data.description && data.description.includes('too big')) {
+                    console.log('Bot API reported file is too big. Showing Telegram fallback.');
+                    showTelegramFallback();
+                    return;
+                }
+                
                 showNotification('Failed to fetch file info: ' + data.description);
                 if (!fileSize) {
                     dlFileName.textContent = 'Encrypted File';
@@ -124,6 +148,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             
             const telegramFile = data.result;
+            
+            // Check file size from Telegram directly (in case Supabase size wasn't available)
+            if (telegramFile.file_size > 20 * 1024 * 1024) {
+                console.log('Telegram file size is >20MB. Showing Telegram fallback.');
+                showTelegramFallback();
+                return;
+            }
+
             directFilePath = `${CONFIG.TELEGRAM_API_BASE}/file/bot${CONFIG.TELEGRAM_BOT_TOKEN}/${telegramFile.file_path}`;
             
             // If metadata wasn't loaded from Supabase, update placeholders
@@ -273,23 +305,30 @@ document.addEventListener('DOMContentLoaded', async () => {
                     chunks.push(value);
                     received += value.byteLength;
 
-                    const now       = Date.now();
-                    const elapsed   = (now - lastTime) / 1000;
+                    const now     = Date.now();
+                    const elapsed = (now - lastTime) / 1000;
 
-                    if (elapsed >= 0.15 || contentLength > 0) {
+                    // Update UI every 150ms (not on every single chunk)
+                    if (elapsed >= 0.15) {
                         const bytesPerSec = elapsed > 0 ? (received - lastReceived) / elapsed : 0;
                         lastTime     = now;
                         lastReceived = received;
 
-                        const pct = contentLength > 0 ? (received / contentLength) * 100 : 0;
-                        setProgress(pct);
-                        dlBytesStat.textContent = contentLength
+                        const pct = contentLength > 0 ? (received / contentLength) * 100 : -1;
+                        if (pct >= 0) {
+                            setProgress(pct);
+                        } else {
+                            // Unknown length – pulse the bar
+                            const pulse = ((Date.now() / 30) % 100);
+                            setProgress(pulse);
+                        }
+                        dlBytesStat.textContent = contentLength > 0
                             ? `${formatBytes(received)} / ${formatBytes(contentLength)}`
                             : `${formatBytes(received)} downloaded`;
                         dlSpeedStat.textContent = bytesPerSec > 0 ? formatBytes(bytesPerSec) + '/s' : '--';
                         dlEtaStat.textContent   = (contentLength > 0 && bytesPerSec > 0)
                             ? formatTime((contentLength - received) / bytesPerSec)
-                            : 'Almost there...';
+                            : 'Downloading...';
                     }
                 }
 
