@@ -31,6 +31,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     let telegramMessageId = null;
     let fileSize = 0;
 
+    // Pre-populate details from URL parameters if available (useful for files > 20MB where getFile fails)
+    const paramName = urlParams.get('name');
+    const paramSize = urlParams.get('size');
+    if (paramName) {
+        originalFileName = decodeURIComponent(paramName);
+        dlFileName.textContent = originalFileName;
+    }
+    if (paramSize) {
+        fileSize = parseInt(paramSize, 10);
+        dlFileSize.textContent = formatBytes(fileSize);
+    }
+    dlUploadDate.textContent = new Date().toLocaleDateString();
+    dlDownloadCount.textContent = '1';
+
     // Helper to build Telegram link
     function getTelegramMessageLink(chatId, messageId) {
         if (chatId.startsWith('@')) {
@@ -123,6 +137,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             
             if (!data.ok) {
                 console.error('Bot API getFile failed:', data.description);
+                if (data.description && data.description.includes('too big')) {
+                    console.log('Bot API reported file is too big. Showing Telegram fallback.');
+                    showTelegramFallback();
+                    return;
+                }
+                
                 showNotification('Failed to fetch file info: ' + data.description);
                 if (!fileSize) {
                     dlFileName.textContent = 'Encrypted File';
@@ -165,6 +185,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         directFilePath = 'mock';
         loadingState.classList.add('hidden');
         fileReadyState.classList.remove('hidden');
+    }
+
+    function showTelegramFallback() {
+        loadingState.classList.add('hidden');
+        decryptingState.classList.add('hidden');
+        fileReadyState.classList.remove('hidden');
+        
+        const telegramDownloadContainer = document.getElementById('telegram-download-container');
+        const telegramLinkBtn = document.getElementById('telegram-link-btn');
+        
+        if (telegramDownloadContainer && telegramLinkBtn) {
+            const tLink = getTelegramMessageLink(CONFIG.TELEGRAM_CHAT_ID, telegramMessageId);
+            telegramLinkBtn.href = tLink;
+            telegramDownloadContainer.classList.remove('hidden');
+        }
+        
+        // Initialize local drag-and-drop decryption handlers
+        initLocalDecryption();
     }
 
     // ── Progress panel helpers ──────────────────────────────────────────────
@@ -413,6 +451,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             triggerDownload(url, originalFileName);
         } else if (directFilePath) {
             startDecryption(directFilePath);
+        } else {
+            // Redirect to Telegram message link to download file if direct download is blocked/impossible
+            const telegramLink = getTelegramMessageLink(CONFIG.TELEGRAM_CHAT_ID, telegramMessageId);
+            showNotification('Direct download unavailable. Redirecting to Telegram to download the file...');
+            setTimeout(() => {
+                window.open(telegramLink, '_blank');
+            }, 1000);
         }
     });
 
@@ -423,6 +468,109 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
+    }
+
+    // Setup Local Decryption Drag-and-Drop / Browse fallback when activated
+    function initLocalDecryption() {
+        const decryptDropzone = document.getElementById('decrypt-dropzone');
+        const decryptFileInput = document.getElementById('decrypt-file-input');
+
+        if (decryptDropzone) {
+            // Remove any existing listeners first to prevent duplicates
+            const newDropzone = decryptDropzone.cloneNode(true);
+            decryptDropzone.parentNode.replaceChild(newDropzone, decryptDropzone);
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                newDropzone.addEventListener(eventName, preventDefaults, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                newDropzone.addEventListener(eventName, () => newDropzone.classList.add('dragover'), false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                newDropzone.addEventListener(eventName, () => newDropzone.classList.remove('dragover'), false);
+            });
+
+            newDropzone.addEventListener('drop', handleDecryptDrop, false);
+            
+            const browseBtn = newDropzone.querySelector('button');
+            if (browseBtn) {
+                browseBtn.addEventListener('click', () => {
+                    const fileInput = document.getElementById('decrypt-file-input');
+                    if (fileInput) fileInput.click();
+                });
+            }
+        }
+
+        if (decryptFileInput) {
+            // Remove existing listener to prevent duplicates
+            const newInput = decryptFileInput.cloneNode(true);
+            decryptFileInput.parentNode.replaceChild(newInput, decryptFileInput);
+            newInput.addEventListener('change', handleDecryptFileSelect, false);
+        }
+    }
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    // drag drop event triggers
+    function handleDecryptDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        if (files.length > 0) {
+            processEncryptedFile(files[0]);
+        }
+    }
+
+    function handleDecryptFileSelect(e) {
+        const files = e.target.files;
+        if (files.length > 0) {
+            processEncryptedFile(files[0]);
+        }
+    }
+
+    async function processEncryptedFile(file) {
+        try {
+            // Show decrypting state
+            fileReadyState.classList.add('hidden');
+            decryptingState.classList.remove('hidden');
+            setProgress(0);
+            activateStep(stepDecrypt);
+            dlPhaseLabel.textContent = 'Decrypting...';
+            dlPhaseSub.textContent   = 'Decrypting file securely in browser';
+            iconDownload.classList.add('hidden');
+            iconDecrypt.classList.remove('hidden');
+
+            const cryptoKey = await importKeyFromBase64(keyHash);
+            
+            // Decrypt the file
+            const decryptedData = await decryptFile(file, cryptoKey);
+            fileData = decryptedData.blob;
+            
+            const decryptedFileName = decryptedData.metadata.name || originalFileName;
+            const decryptedMimeType = decryptedData.metadata.type || originalMimeType;
+
+            // Hide decrypting state, show file ready state
+            decryptingState.classList.add('hidden');
+            fileReadyState.classList.remove('hidden');
+            
+            dlFileName.textContent = decryptedFileName;
+            dlFileSize.textContent = formatBytes(fileData.size);
+
+            const objUrl = URL.createObjectURL(fileData);
+            triggerDownload(objUrl, decryptedFileName);
+            setupPreview(objUrl, decryptedMimeType, decryptedFileName, true);
+
+            showNotification('File decrypted successfully!');
+        } catch (error) {
+            console.error('Local decryption failed:', error);
+            showNotification('Failed to decrypt. Make sure you loaded the correct encrypted file.');
+            decryptingState.classList.add('hidden');
+            fileReadyState.classList.remove('hidden');
+        }
     }
 
 

@@ -250,7 +250,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (supabaseId) {
             finalUrl = `${window.location.origin}${basePath}/download.html?id=${supabaseId}#${exportedKey}`;
         } else {
-            finalUrl = `${window.location.origin}${basePath}/download.html?msg=${messageId}&id=${fileId}#${exportedKey}`;
+            const encodedName = encodeURIComponent(selectedFile.name);
+            finalUrl = `${window.location.origin}${basePath}/download.html?msg=${messageId}&id=${fileId}&name=${encodedName}&size=${selectedFile.size}#${exportedKey}`;
         }
         
         shareLinkInput.value = finalUrl;
