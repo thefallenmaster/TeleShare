@@ -705,3 +705,164 @@ footer {
     vertical-align: middle;
     margin-right: 8px;
 }
+
+/* ── Download + Decrypt Progress Panel ──────────────────────────────────── */
+.dl-progress-panel {
+    padding: 2rem 0;
+    animation: fadeIn 0.3s ease;
+}
+
+.dl-progress-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.dl-phase-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 1rem;
+    background: rgba(99, 102, 241, 0.15);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    color: var(--primary-color);
+    flex-shrink: 0;
+    transition: background 0.4s, border-color 0.4s;
+}
+
+.dl-phase-text {
+    flex: 1;
+}
+
+.dl-phase-text h2 {
+    font-size: 1.2rem;
+    margin-bottom: 0.2rem;
+    transition: all 0.3s;
+}
+
+.dl-phase-text p {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.dl-percent-badge {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--primary-color);
+    min-width: 4rem;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    transition: color 0.3s;
+}
+
+/* Progress track */
+.dl-progress-track {
+    position: relative;
+    height: 10px;
+    background: var(--input-border);
+    border-radius: 999px;
+    overflow: visible;
+    margin-bottom: 0.75rem;
+}
+
+.dl-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #6366f1, #8b5cf6, #06b6d4);
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+    border-radius: 999px;
+    width: 0%;
+    transition: width 0.25s ease-out;
+}
+
+.dl-progress-glow {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #8b5cf6;
+    filter: blur(6px);
+    opacity: 0.7;
+    pointer-events: none;
+    transition: left 0.25s ease-out;
+}
+
+@keyframes shimmer {
+    0%   { background-position: 200% center; }
+    100% { background-position: -200% center; }
+}
+
+/* Stats row */
+.dl-progress-stats {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin-bottom: 1.75rem;
+    font-variant-numeric: tabular-nums;
+}
+
+/* Phase steps */
+.dl-phase-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+}
+
+.dl-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    min-width: 60px;
+}
+
+.dl-step-line {
+    flex: 1;
+    height: 2px;
+    background: var(--input-border);
+    border-radius: 2px;
+    margin-bottom: 1.1rem;
+    transition: background 0.4s;
+}
+
+.dl-step-dot {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--input-border);
+    border: 2px solid var(--panel-border);
+    transition: background 0.35s, border-color 0.35s, transform 0.25s;
+}
+
+.dl-step-dot.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    transform: scale(1.4);
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.25);
+}
+
+.dl-step-dot.done {
+    background: #10b981;
+    border-color: #10b981;
+}
+
+/* When done step activates, badge turns green */
+.dl-percent-badge.done { color: #10b981; }
+
+@media (max-width: 480px) {
+    .dl-progress-header { flex-wrap: wrap; }
+    .dl-percent-badge { font-size: 1.2rem; }
+    .dl-progress-stats { flex-direction: column; gap: 0.25rem; }
+    .dl-step { min-width: 44px; font-size: 0.7rem; }
+}

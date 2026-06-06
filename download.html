@@ -42,10 +42,47 @@
                 <a href="index.html" class="btn btn-primary mt-4">Go Home</a>
             </div>
 
-            <div id="decrypting-state" class="password-state hidden">
-                <div class="spinner"></div>
-                <h2>Decrypting File...</h2>
-                <p>Please wait while we decrypt the file securely in your browser.</p>
+            <!-- Download & Decrypt Progress Panel -->
+            <div id="decrypting-state" class="dl-progress-panel hidden">
+                <div class="dl-progress-header">
+                    <div class="dl-phase-icon" id="dl-phase-icon">
+                        <svg id="icon-download" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        <svg id="icon-decrypt" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="hidden"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </div>
+                    <div class="dl-phase-text">
+                        <h2 id="dl-phase-label">Downloading...</h2>
+                        <p id="dl-phase-sub">Fetching encrypted file from Telegram</p>
+                    </div>
+                    <span id="dl-percent-badge" class="dl-percent-badge">0%</span>
+                </div>
+
+                <div class="dl-progress-track">
+                    <div id="dl-progress-fill" class="dl-progress-fill"></div>
+                    <div id="dl-progress-glow" class="dl-progress-glow"></div>
+                </div>
+
+                <div class="dl-progress-stats">
+                    <span id="dl-bytes-stat">0 B / --</span>
+                    <span id="dl-speed-stat">-- MB/s</span>
+                    <span id="dl-eta-stat">Calculating...</span>
+                </div>
+
+                <div class="dl-phase-steps">
+                    <div class="dl-step" id="step-download">
+                        <div class="dl-step-dot active"></div>
+                        <span>Download</span>
+                    </div>
+                    <div class="dl-step-line"></div>
+                    <div class="dl-step" id="step-decrypt">
+                        <div class="dl-step-dot"></div>
+                        <span>Decrypt</span>
+                    </div>
+                    <div class="dl-step-line"></div>
+                    <div class="dl-step" id="step-done">
+                        <div class="dl-step-dot"></div>
+                        <span>Done</span>
+                    </div>
+                </div>
             </div>
 
             <div id="file-ready-state" class="file-ready-state hidden">

@@ -171,22 +171,74 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    // ── Progress panel helpers ──────────────────────────────────────────────
+    const dlProgressFill   = document.getElementById('dl-progress-fill');
+    const dlProgressGlow   = document.getElementById('dl-progress-glow');
+    const dlPercentBadge   = document.getElementById('dl-percent-badge');
+    const dlPhaseLabel     = document.getElementById('dl-phase-label');
+    const dlPhaseSub       = document.getElementById('dl-phase-sub');
+    const dlBytesStat      = document.getElementById('dl-bytes-stat');
+    const dlSpeedStat      = document.getElementById('dl-speed-stat');
+    const dlEtaStat        = document.getElementById('dl-eta-stat');
+    const iconDownload     = document.getElementById('icon-download');
+    const iconDecrypt      = document.getElementById('icon-decrypt');
+    const stepDownload     = document.getElementById('step-download');
+    const stepDecrypt      = document.getElementById('step-decrypt');
+    const stepDone         = document.getElementById('step-done');
+
+    function setProgress(pct, animated = true) {
+        const p = Math.min(100, Math.max(0, pct));
+        dlProgressFill.style.width = p + '%';
+        dlProgressGlow.style.left  = p + '%';
+        dlPercentBadge.textContent = Math.round(p) + '%';
+    }
+
+    function activateStep(step) {
+        [stepDownload, stepDecrypt, stepDone].forEach(s => {
+            s.querySelector('.dl-step-dot').classList.remove('active', 'done');
+        });
+        const steps = [stepDownload, stepDecrypt, stepDone];
+        const idx   = steps.indexOf(step);
+        steps.forEach((s, i) => {
+            const dot = s.querySelector('.dl-step-dot');
+            if (i < idx)  dot.classList.add('done');
+            if (i === idx) dot.classList.add('active');
+        });
+    }
+
+    // ── Main download + decrypt flow ────────────────────────────────────────
     async function startDecryption(fileUrl) {
-        // Change download button state to loading
         const originalBtnContent = downloadBtn.innerHTML;
         downloadBtn.disabled = true;
-        downloadBtn.innerHTML = `<div class="spinner-sm"></div> Downloading & Decrypting...`;
+
+        // Show progress panel
+        fileReadyState.classList.add('hidden');
+        decryptingState.classList.remove('hidden');
+        setProgress(0);
+        activateStep(stepDownload);
+        dlPhaseLabel.textContent = 'Downloading...';
+        dlPhaseSub.textContent   = 'Fetching encrypted file from Telegram';
+        iconDownload.classList.remove('hidden');
+        iconDecrypt.classList.add('hidden');
 
         try {
             let encryptedBlob;
+
             if (fileUrl === 'mock') {
-                // Mock encrypted blob and wait a bit
-                await new Promise(r => setTimeout(r, 1500));
+                // Simulate download progress for mock
+                for (let i = 0; i <= 100; i += 5) {
+                    setProgress(i);
+                    dlBytesStat.textContent  = `${i} B / 100 B`;
+                    dlSpeedStat.textContent  = '5 B/s';
+                    dlEtaStat.textContent    = `${Math.ceil((100 - i) / 5)}s left`;
+                    await new Promise(r => setTimeout(r, 40));
+                }
+                encryptedBlob = new Blob(["Mock Decrypted Content"], {type: 'text/plain'});
                 fileData = new Blob(["Mock Decrypted Content"], {type: 'text/plain'});
                 originalFileName = 'mock_file.txt';
                 originalMimeType = 'text/plain';
             } else {
-                // Fetch the encrypted file from Telegram (via AllOrigins if using corsproxy.io due to content-type blocking)
+                // ── Phase 1: Download with real streaming progress ──────────
                 let fetchUrl = fileUrl;
                 if (CONFIG.CORS_PROXY) {
                     if (CONFIG.CORS_PROXY.includes('corsproxy.io')) {
@@ -195,63 +247,156 @@ document.addEventListener('DOMContentLoaded', async () => {
                         fetchUrl = `${CONFIG.CORS_PROXY}${encodeURIComponent(fileUrl)}`;
                     }
                 }
+
                 let response;
                 try {
                     response = await fetch(fetchUrl);
-                    if (!response.ok) throw new Error('Proxy returned non-OK status: ' + response.status);
-                    encryptedBlob = await response.blob();
+                    if (!response.ok) throw new Error('HTTP ' + response.status);
                 } catch (fetchErr) {
-                    console.error('Direct file download failed:', fetchErr);
-                    showNotification('Download failed. Could not fetch file from Telegram.');
-                    downloadBtn.disabled = false;
-                    downloadBtn.innerHTML = originalBtnContent;
+                    console.error('Download failed:', fetchErr);
+                    showNotification('Download failed: ' + fetchErr.message);
+                    resetAfterError(originalBtnContent);
                     return;
                 }
-                
-                // Import the key from URL hash
-                const cryptoKey = await importKeyFromBase64(keyHash);
-                
-                // Decrypt and extract metadata
+
+                const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+                const reader        = response.body.getReader();
+                const chunks        = [];
+                let received        = 0;
+                let startTime       = Date.now();
+                let lastTime        = startTime;
+                let lastReceived    = 0;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                    received += value.byteLength;
+
+                    const now       = Date.now();
+                    const elapsed   = (now - lastTime) / 1000;
+
+                    if (elapsed >= 0.15 || contentLength > 0) {
+                        const bytesPerSec = elapsed > 0 ? (received - lastReceived) / elapsed : 0;
+                        lastTime     = now;
+                        lastReceived = received;
+
+                        const pct = contentLength > 0 ? (received / contentLength) * 100 : 0;
+                        setProgress(pct);
+                        dlBytesStat.textContent = contentLength
+                            ? `${formatBytes(received)} / ${formatBytes(contentLength)}`
+                            : `${formatBytes(received)} downloaded`;
+                        dlSpeedStat.textContent = bytesPerSec > 0 ? formatBytes(bytesPerSec) + '/s' : '--';
+                        dlEtaStat.textContent   = (contentLength > 0 && bytesPerSec > 0)
+                            ? formatTime((contentLength - received) / bytesPerSec)
+                            : 'Almost there...';
+                    }
+                }
+
+                // Merge chunks into single blob
+                const totalLength = chunks.reduce((acc, c) => acc + c.byteLength, 0);
+                const merged      = new Uint8Array(totalLength);
+                let offset = 0;
+                for (const chunk of chunks) { merged.set(chunk, offset); offset += chunk.byteLength; }
+                encryptedBlob = new Blob([merged]);
+
+                // ── Phase 2: Decryption progress animation ─────────────────
+                setProgress(100);
+                dlBytesStat.textContent = contentLength
+                    ? `${formatBytes(contentLength)} / ${formatBytes(contentLength)}`
+                    : `${formatBytes(received)} downloaded`;
+                dlSpeedStat.textContent = 'Done';
+                dlEtaStat.textContent   = 'Decrypting...';
+
+                // Transition UI to decrypt phase
+                await new Promise(r => setTimeout(r, 300));
+                activateStep(stepDecrypt);
+                dlPhaseLabel.textContent = 'Decrypting...';
+                dlPhaseSub.textContent   = 'Decrypting securely in your browser';
+                iconDownload.classList.add('hidden');
+                iconDecrypt.classList.remove('hidden');
+                setProgress(10);
+
+                // Animate progress from 10→90 while Web Crypto runs
+                const animateDecrypt = (() => {
+                    let pct = 10;
+                    const iv = setInterval(() => {
+                        pct = Math.min(90, pct + Math.random() * 8);
+                        setProgress(pct);
+                    }, 120);
+                    return iv;
+                })();
+
+                let cryptoKey;
                 try {
-                    const decryptedData = await decryptFile(encryptedBlob, cryptoKey);
-                    fileData = decryptedData.blob;
-                    originalFileName = decryptedData.metadata.name || 'secure_file_teleshare';
-                    originalMimeType = decryptedData.metadata.type || 'application/octet-stream';
-                } catch (decryptErr) {
-                    console.error('Decryption failed. The key might be invalid.', decryptErr);
-                    showNotification('Failed to decrypt. Link might be invalid.');
-                    downloadBtn.disabled = false;
-                    downloadBtn.innerHTML = originalBtnContent;
+                    cryptoKey = await importKeyFromBase64(keyHash);
+                } catch {
+                    clearInterval(animateDecrypt);
+                    showNotification('Invalid decryption key in link.');
+                    resetAfterError(originalBtnContent);
                     return;
                 }
+
+                let decryptedData;
+                try {
+                    decryptedData = await decryptFile(encryptedBlob, cryptoKey);
+                } catch (decryptErr) {
+                    clearInterval(animateDecrypt);
+                    console.error('Decryption failed:', decryptErr);
+                    showNotification('Failed to decrypt. Link might be invalid or corrupted.');
+                    resetAfterError(originalBtnContent);
+                    return;
+                }
+                clearInterval(animateDecrypt);
+
+                fileData         = decryptedData.blob;
+                originalFileName = decryptedData.metadata.name || 'secure_file_teleshare';
+                originalMimeType = decryptedData.metadata.type || 'application/octet-stream';
             }
-            
-            // Update UI with decrypted info
+
+            // ── Phase 3: Done ──────────────────────────────────────────────
+            activateStep(stepDone);
+            dlPhaseLabel.textContent = 'Complete!';
+            dlPhaseSub.textContent   = 'File decrypted successfully';
+            dlBytesStat.textContent  = formatBytes(fileData.size);
+            dlSpeedStat.textContent  = '';
+            dlEtaStat.textContent    = '';
+            setProgress(100);
+            await new Promise(r => setTimeout(r, 500));
+
+            // Hide progress, show file-ready state
+            decryptingState.classList.add('hidden');
+            fileReadyState.classList.remove('hidden');
+
             dlFileName.textContent = originalFileName;
             dlFileSize.textContent = formatBytes(fileData.size);
-            
+
             const objUrl = URL.createObjectURL(fileData);
             setupPreview(objUrl, originalMimeType, originalFileName, true);
-
-            // Trigger download directly
             triggerDownload(objUrl, originalFileName);
 
-            // Restore button
             downloadBtn.disabled = false;
             downloadBtn.innerHTML = originalBtnContent;
 
-            // Increment download count locally for UI feedback
             const currentCount = parseInt(dlDownloadCount.textContent) || 0;
             dlDownloadCount.textContent = (currentCount + 1).toString();
 
             showNotification('File downloaded and decrypted successfully!');
+
         } catch (e) {
-            console.error('Unexpected error during decryption flow:', e);
+            console.error('Unexpected error:', e);
             showNotification('An unexpected error occurred.');
-            downloadBtn.disabled = false;
-            downloadBtn.innerHTML = originalBtnContent;
+            resetAfterError(originalBtnContent);
         }
     }
+
+    function resetAfterError(originalBtnContent) {
+        decryptingState.classList.add('hidden');
+        fileReadyState.classList.remove('hidden');
+        downloadBtn.disabled = false;
+        downloadBtn.innerHTML = originalBtnContent;
+    }
+
 
     function showError() {
         loadingState.classList.add('hidden');
