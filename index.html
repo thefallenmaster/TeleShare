@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyShare - Free Secure File Sharing</title>
+    <meta name="description" content="SkyShare is a modern, free, and secure file sharing platform. Upload your files and get a shareable link instantly.">
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <!-- Background Elements -->
+    <div class="bg-shape shape-1"></div>
+    <div class="bg-shape shape-2"></div>
+    <div class="bg-shape shape-3"></div>
+
+    <header>
+        <div class="logo">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"></path><path d="M12 12v9"></path><path d="m8 17 4-4 4 4"></path></svg>
+            <span>SkyShare</span>
+        </div>
+        <nav>
+            <a href="index.html" class="active">Home</a>
+            <a href="about.html">About</a>
+        </nav>
+        <button id="theme-toggle" aria-label="Toggle Theme">
+            <svg class="sun-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+            <svg class="moon-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>
+    </header>
+
+    <main class="container">
+        <section class="upload-section glass-panel">
+            <h1>Upload & Share Files</h1>
+            <p class="subtitle">Secure, fast, and free file sharing. No account required.</p>
+            
+            <div id="dropzone" class="dropzone">
+                <input type="file" id="file-input" class="file-input" hidden>
+                <div class="drop-content">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                    <h3>Drag & Drop your files here</h3>
+                    <p>or</p>
+                    <button class="btn btn-primary" onclick="document.getElementById('file-input').click()">Browse Files</button>
+                    <p class="file-limits">Maximum file size: 2GB</p>
+                </div>
+            </div>
+
+            <div id="file-details" class="file-details hidden">
+                <div class="file-info">
+                    <svg class="file-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                    <div class="file-meta">
+                        <span id="file-name" class="file-name">filename.zip</span>
+                        <span id="file-size" class="file-size">2.5 MB</span>
+                    </div>
+                    <button id="remove-file" class="btn-icon" aria-label="Remove File">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                    </button>
+                </div>
+
+                <div class="advanced-settings">
+                    <button type="button" class="toggle-settings" id="toggle-settings">
+                        Advanced Settings <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                    </button>
+                    <div class="settings-panel hidden" id="settings-panel">
+                        <div class="form-group">
+                            <p style="font-size: 0.85rem; color: var(--text-muted);">Files are automatically encrypted client-side using AES-GCM before upload. Only those with the exact link can access the file.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="upload-btn" class="btn btn-primary btn-block mt-4">Upload File</button>
+            </div>
+
+            <div id="upload-progress-container" class="upload-progress-container hidden">
+                <div class="progress-info">
+                    <span id="upload-status">Uploading...</span>
+                    <span id="upload-percentage">0%</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div id="progress-bar" class="progress-bar"></div>
+                </div>
+                <div class="progress-stats">
+                    <span id="upload-speed">0 MB/s</span>
+                    <span id="upload-time-left">Calculating...</span>
+                </div>
+            </div>
+
+            <div id="share-container" class="share-container hidden">
+                <div class="success-icon">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                </div>
+                <h3>Upload Complete!</h3>
+                <p>Your file is ready to share.</p>
+                
+                <div class="link-group">
+                    <input type="text" id="share-link" readonly>
+                    <button id="copy-btn" class="btn btn-primary">Copy</button>
+                </div>
+                
+                <div class="share-actions">
+                    <button id="show-qr-btn" class="btn btn-outline">QR Code</button>
+                    <button id="email-btn" class="btn btn-outline">Email</button>
+                </div>
+
+                <div id="qrcode" class="qrcode-container hidden"></div>
+                
+                <button id="upload-another-btn" class="btn btn-text mt-4">Upload another file</button>
+            </div>
+
+        </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2026 SkyShare. All rights reserved.</p>
+        <div class="footer-links">
+            <a href="privacy.html">Privacy Policy</a>
+            <a href="terms.html">Terms of Service</a>
+        </div>
+    </footer>
+
+    <div id="notification" class="notification"></div>
+
+    <script src="script.js?v=2"></script>
+    <script src="upload.js?v=2"></script>
+</body>
+</html>
