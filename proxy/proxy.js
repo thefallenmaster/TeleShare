@@ -38,33 +38,16 @@ http.createServer(async (req, res) => {
             fetchOptions.headers['Content-Type'] = req.headers['content-type'];
         }
 
-        // ── Buffer full request body before forwarding ──────────────────────
-        // Streaming body via `body: req` causes ECONNRESET for large files
-        // because Telegram's API requires a known Content-Length to parse
-        // multipart boundaries correctly.
+        // Forward the Content-Length header from the browser (critical for Nginx/Telegram)
+        if (req.headers['content-length']) {
+            fetchOptions.headers['Content-Length'] = req.headers['content-length'];
+        }
+
+        // Forward body as stream for non-GET/HEAD requests
         if (req.method !== 'GET' && req.method !== 'HEAD') {
-            const bodyChunks = [];
-            let totalBytes = 0;
-
-            await new Promise((resolve, reject) => {
-                req.on('data', (chunk) => {
-                    totalBytes += chunk.length;
-                    if (totalBytes > MAX_BODY_BYTES) {
-                        req.destroy();
-                        reject(new Error(`Request body too large (>${MAX_BODY_BYTES / 1024 / 1024} MB)`));
-                        return;
-                    }
-                    bodyChunks.push(chunk);
-                });
-                req.on('end', resolve);
-                req.on('error', reject);
-            });
-
-            const fullBody = Buffer.concat(bodyChunks);
-            fetchOptions.body = fullBody;
-            // Set explicit Content-Length so Telegram doesn't have to guess
-            fetchOptions.headers['Content-Length'] = String(fullBody.byteLength);
-            console.log(`  Body buffered: ${(fullBody.byteLength / 1024 / 1024).toFixed(2)} MB`);
+            fetchOptions.body = req;
+            fetchOptions.duplex = 'half';
+            console.log(`  Streaming upload: ${req.headers['content-length'] ? (parseInt(req.headers['content-length'], 10) / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown size'}`);
         }
 
         // Forward to Telegram (no timeout — large uploads can take minutes)

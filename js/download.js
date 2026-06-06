@@ -86,12 +86,6 @@ document.addEventListener('DOMContentLoaded', async () => {
                 dlUploadDate.textContent = new Date(data.created_at).toLocaleDateString();
                 dlDownloadCount.textContent = '1';
 
-                if (fileSize > 20 * 1024 * 1024) {
-                    console.log('File size is >20MB. Using Telegram download fallback.');
-                    showTelegramFallback();
-                    return;
-                }
-
                 if (CONFIG.TELEGRAM_BOT_TOKEN === 'YOUR_TELEGRAM_BOT_TOKEN' || (telegramFileId && telegramFileId.startsWith('mock_file_id'))) {
                     mockMetadata();
                 } else {
@@ -148,14 +142,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             
             const telegramFile = data.result;
-            
-            // Check file size from Telegram directly (in case Supabase size wasn't available)
-            if (telegramFile.file_size > 20 * 1024 * 1024) {
-                console.log('Telegram file size is >20MB. Showing Telegram fallback.');
-                showTelegramFallback();
-                return;
-            }
-
             directFilePath = `${CONFIG.TELEGRAM_API_BASE}/file/bot${CONFIG.TELEGRAM_BOT_TOKEN}/${telegramFile.file_path}`;
             
             // If metadata wasn't loaded from Supabase, update placeholders
