@@ -77,7 +77,7 @@ function decryptConfigValue(encodedText) {
 }
 
 const CONFIG = {
-    TELEGRAM_BOT_TOKEN: decryptConfigValue('S11ARVlXSlMcRV8iMyAySFswSGkLZ3QBFBoNMRo1FhxdJychICctWw4HHGZTVw=='),
+    TELEGRAM_BOT_TOKEN: decryptConfigValue('S1JNQlBRQFAZRl8iMyImFFM3PElRSHhvOC8dFDwAMwJqPhFOKyQtVRMnPEBFQw=='),
     TELEGRAM_CHAT_ID: decryptConfigValue('Mx8cABwTGBdHAwIB'),
     TELEGRAM_API_BASE: 'https://api.telegram.org', // Change to your local Bot API server URL for 2GB support
     CORS_PROXY: (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || !window.location.hostname)
