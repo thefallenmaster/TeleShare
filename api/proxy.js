@@ -4,63 +4,77 @@ export const config = {
     },
 };
 
-export default async function handler(req, res) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', '*');
+export default function handler(req, res) {
+    return new Promise((resolve) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', '*');
 
-    if (req.method === 'OPTIONS') {
-        res.status(204).end();
-        return;
-    }
+        if (req.method === 'OPTIONS') {
+            res.status(204).end();
+            return resolve();
+        }
 
-    // Extract target URL
-    const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-    let targetUrl = parsedUrl.searchParams.get('url');
-    if (!targetUrl) {
-        const cleanPath = req.url.replace(/^\/api\/proxy\/?/, '').replace(/^\//, '');
-        targetUrl = decodeURIComponent(cleanPath);
-    }
-    if (targetUrl) {
-        targetUrl = targetUrl.replace(/^(https?):\/([^\/])/, '$1://$2');
-    }
+        const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+        let targetUrl = parsedUrl.searchParams.get('url');
+        
+        if (!targetUrl) {
+            const cleanPath = req.url.replace(/^\/api\/proxy\/?/, '').replace(/^\//, '');
+            targetUrl = decodeURIComponent(cleanPath);
+        }
+        
+        if (targetUrl) {
+            targetUrl = targetUrl.replace(/^(https?):\/([^\/])/, '$1://$2');
+        }
 
-    if (!targetUrl || !targetUrl.startsWith('http')) {
-        return res.status(400).json({ error: 'Invalid target URL. Must start with http.' });
-    }
+        if (!targetUrl || !targetUrl.startsWith('http')) {
+            res.status(400).json({ error: 'Invalid target URL. Must start with http.' });
+            return resolve();
+        }
 
-    try {
-        const fetchOptions = {
+        const targetUrlParsed = new URL(targetUrl);
+        const protocol = targetUrlParsed.protocol === 'https:' ? require('https') : require('http');
+
+        const options = {
+            hostname: targetUrlParsed.hostname,
+            port: targetUrlParsed.port || (targetUrlParsed.protocol === 'https:' ? 443 : 80),
+            path: targetUrlParsed.pathname + targetUrlParsed.search,
             method: req.method,
             headers: {}
         };
 
-        if (req.headers['content-type']) fetchOptions.headers['Content-Type'] = req.headers['content-type'];
-        if (req.headers['content-length']) fetchOptions.headers['Content-Length'] = req.headers['content-length'];
+        if (req.headers['content-type']) {
+            options.headers['Content-Type'] = req.headers['content-type'];
+        }
+        if (req.headers['content-length']) {
+            options.headers['Content-Length'] = req.headers['content-length'];
+        }
+
+        const proxyReq = protocol.request(options, (proxyRes) => {
+            if (proxyRes.headers['content-type']) {
+                res.setHeader('Content-Type', proxyRes.headers['content-type']);
+            }
+            if (proxyRes.headers['content-length']) {
+                res.setHeader('Content-Length', proxyRes.headers['content-length']);
+            }
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.status(proxyRes.statusCode);
+
+            proxyRes.pipe(res);
+            proxyRes.on('end', resolve);
+        });
+
+        proxyReq.on('error', (err) => {
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Proxy error: ' + err.message });
+            }
+            resolve();
+        });
 
         if (req.method !== 'GET' && req.method !== 'HEAD') {
-            fetchOptions.body = req;
-            fetchOptions.duplex = 'half';
+            req.pipe(proxyReq);
+        } else {
+            proxyReq.end();
         }
-
-        const response = await fetch(targetUrl, fetchOptions);
-
-        if (response.headers.get('content-type')) res.setHeader('Content-Type', response.headers.get('content-type'));
-        if (response.headers.get('content-length')) res.setHeader('Content-Length', response.headers.get('content-length'));
-
-        res.status(response.status);
-
-        if (response.body) {
-            const reader = response.body.getReader();
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                res.write(value);
-            }
-        }
-        res.end();
-    } catch (err) {
-        if (!res.headersSent) res.status(500).json({ error: 'Proxy error: ' + err.message });
-        else res.end();
-    }
+    });
 }

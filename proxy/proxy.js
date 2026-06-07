@@ -1,10 +1,10 @@
 const http = require('http');
+const https = require('https');
 const url = require('url');
 const { TelegramClient } = require("telegram");
 const { StringSession } = require("telegram/sessions");
 
-const PORT = 8081;
-const MAX_BODY_BYTES = 55 * 1024 * 1024;
+const PORT = process.env.PORT || 8081;
 
 let telegramClient = null;
 const apiId = 6;
@@ -105,46 +105,50 @@ http.createServer(async (req, res) => {
     try {
         console.log(`[${new Date().toISOString()}] ${req.method} → ${targetUrl}`);
 
-        const fetchOptions = {
+        const targetUrlParsed = new URL(targetUrl);
+        const protocol = targetUrlParsed.protocol === 'https:' ? https : http;
+
+        const options = {
+            hostname: targetUrlParsed.hostname,
+            port: targetUrlParsed.port || (targetUrlParsed.protocol === 'https:' ? 443 : 80),
+            path: targetUrlParsed.pathname + (targetUrlParsed.search || ''),
             method: req.method,
             headers: {}
         };
 
         if (req.headers['content-type']) {
-            fetchOptions.headers['Content-Type'] = req.headers['content-type'];
+            options.headers['Content-Type'] = req.headers['content-type'];
+        }
+        if (req.headers['content-length']) {
+            options.headers['Content-Length'] = req.headers['content-length'];
         }
 
-        if (req.headers['content-length']) {
-            fetchOptions.headers['Content-Length'] = req.headers['content-length'];
-        }
+        const proxyReq = protocol.request(options, (proxyRes) => {
+            if (proxyRes.headers['content-type']) {
+                res.setHeader('Content-Type', proxyRes.headers['content-type']);
+            }
+            if (proxyRes.headers['content-length']) {
+                res.setHeader('Content-Length', proxyRes.headers['content-length']);
+            }
+            res.setHeader('Access-Control-Allow-Origin', '*');
+            res.writeHead(proxyRes.statusCode);
+
+            proxyRes.pipe(res);
+        });
+
+        proxyReq.on('error', (err) => {
+            console.error('Proxy request error:', err.message);
+            if (!res.headersSent) {
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: 'Proxy error: ' + err.message }));
+            }
+        });
 
         if (req.method !== 'GET' && req.method !== 'HEAD') {
-            fetchOptions.body = req;
-            fetchOptions.duplex = 'half';
+            req.pipe(proxyReq);
+        } else {
+            proxyReq.end();
         }
-
-        const response = await fetch(targetUrl, fetchOptions);
-
-        if (response.headers.get('content-type')) {
-            res.setHeader('Content-Type', response.headers.get('content-type'));
-        }
-        if (response.headers.get('content-length')) {
-            res.setHeader('Content-Length', response.headers.get('content-length'));
-        }
-
-        res.writeHead(response.status);
-
-        if (response.body) {
-            const reader = response.body.getReader();
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                res.write(value);
-            }
-        }
-        res.end();
-
-        console.log(`  ← ${response.status} OK`);
     } catch (err) {
         console.error('Proxy Error:', err.message);
         if (!res.headersSent) {
@@ -155,5 +159,6 @@ http.createServer(async (req, res) => {
         }
     }
 }).listen(PORT, () => {
-    console.log(`\n🚀 TeleShare Proxy running on http://localhost:${PORT}`);
+    console.log(`\n🚀 TeleShare Proxy running on port ${PORT}`);
 });
+
