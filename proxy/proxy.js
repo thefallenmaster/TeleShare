@@ -1,10 +1,13 @@
 const http = require('http');
 const https = require('https');
 const url = require('url');
+const fs = require('fs');
+const path = require('path');
 const { TelegramClient } = require("telegram");
 const { StringSession } = require("telegram/sessions");
 
 const PORT = process.env.PORT || 8081;
+const rootDir = path.join(__dirname, '..');
 
 let telegramClient = null;
 const apiId = 6;
@@ -87,77 +90,116 @@ http.createServer(async (req, res) => {
     }
 
     // Standard Proxy Logic
-    let targetUrl = parsedUrl.query.url;
-    if (!targetUrl) {
-        const cleanPath = req.url.replace(/^\//, '');
-        targetUrl = decodeURIComponent(cleanPath);
-    }
-    if (targetUrl) {
-        targetUrl = targetUrl.replace(/^(https?):\/([^\/])/, '$1://$2');
-    }
-
-    if (!targetUrl || !targetUrl.startsWith('http')) {
-        res.writeHead(400);
-        res.end(JSON.stringify({ error: 'Invalid target URL. Must start with http.' }));
-        return;
-    }
-
-    try {
-        console.log(`[${new Date().toISOString()}] ${req.method} → ${targetUrl}`);
-
-        const targetUrlParsed = new URL(targetUrl);
-        const protocol = targetUrlParsed.protocol === 'https:' ? https : http;
-
-        const options = {
-            hostname: targetUrlParsed.hostname,
-            port: targetUrlParsed.port || (targetUrlParsed.protocol === 'https:' ? 443 : 80),
-            path: targetUrlParsed.pathname + (targetUrlParsed.search || ''),
-            method: req.method,
-            headers: {}
-        };
-
-        if (req.headers['content-type']) {
-            options.headers['Content-Type'] = req.headers['content-type'];
-        }
-        if (req.headers['content-length']) {
-            options.headers['Content-Length'] = req.headers['content-length'];
+    if (parsedUrl.pathname === '/api/proxy' || parsedUrl.query.url) {
+        let targetUrl = parsedUrl.query.url;
+        
+        if (targetUrl) {
+            targetUrl = targetUrl.replace(/^(https?):\/([^\/])/, '$1://$2');
         }
 
-        const proxyReq = protocol.request(options, (proxyRes) => {
-            if (proxyRes.headers['content-type']) {
-                res.setHeader('Content-Type', proxyRes.headers['content-type']);
-            }
-            if (proxyRes.headers['content-length']) {
-                res.setHeader('Content-Length', proxyRes.headers['content-length']);
-            }
-            res.setHeader('Access-Control-Allow-Origin', '*');
-            res.writeHead(proxyRes.statusCode);
+        if (!targetUrl || !targetUrl.startsWith('http')) {
+            res.writeHead(400);
+            res.end(JSON.stringify({ error: 'Invalid target URL. Must start with http.' }));
+            return;
+        }
 
-            proxyRes.pipe(res);
-        });
+        try {
+            console.log(`[${new Date().toISOString()}] ${req.method} → ${targetUrl}`);
 
-        proxyReq.on('error', (err) => {
-            console.error('Proxy request error:', err.message);
+            const targetUrlParsed = new URL(targetUrl);
+            const protocol = targetUrlParsed.protocol === 'https:' ? https : http;
+
+            const options = {
+                hostname: targetUrlParsed.hostname,
+                port: targetUrlParsed.port || (targetUrlParsed.protocol === 'https:' ? 443 : 80),
+                path: targetUrlParsed.pathname + (targetUrlParsed.search || ''),
+                method: req.method,
+                headers: {}
+            };
+
+            if (req.headers['content-type']) {
+                options.headers['Content-Type'] = req.headers['content-type'];
+            }
+            if (req.headers['content-length']) {
+                options.headers['Content-Length'] = req.headers['content-length'];
+            }
+
+            const proxyReq = protocol.request(options, (proxyRes) => {
+                if (proxyRes.headers['content-type']) {
+                    res.setHeader('Content-Type', proxyRes.headers['content-type']);
+                }
+                if (proxyRes.headers['content-length']) {
+                    res.setHeader('Content-Length', proxyRes.headers['content-length']);
+                }
+                res.setHeader('Access-Control-Allow-Origin', '*');
+                res.writeHead(proxyRes.statusCode);
+
+                proxyRes.pipe(res);
+            });
+
+            proxyReq.on('error', (err) => {
+                console.error('Proxy request error:', err.message);
+                if (!res.headersSent) {
+                    res.writeHead(500);
+                    res.end(JSON.stringify({ error: 'Proxy error: ' + err.message }));
+                }
+            });
+
+            if (req.method !== 'GET' && req.method !== 'HEAD') {
+                req.pipe(proxyReq);
+            } else {
+                proxyReq.end();
+            }
+        } catch (err) {
+            console.error('Proxy Error:', err.message);
             if (!res.headersSent) {
                 res.writeHead(500);
                 res.end(JSON.stringify({ error: 'Proxy error: ' + err.message }));
+            } else {
+                res.end();
+            }
+        }
+        return;
+    }
+
+    // Serve Static Files for the Frontend
+    let pathname = parsedUrl.pathname;
+    if (pathname === '/') pathname = '/index.html';
+    
+    // Prevent directory traversal
+    pathname = path.normalize(pathname).replace(/^(\.\.[\/\\])+/, '');
+    const filePath = path.join(rootDir, pathname);
+
+    fs.stat(filePath, (err, stats) => {
+        if (err || !stats.isFile()) {
+            res.writeHead(404);
+            res.end('404 Not Found');
+            return;
+        }
+        
+        const ext = path.extname(filePath).toLowerCase();
+        const mimeTypes = {
+            '.html': 'text/html',
+            '.js': 'text/javascript',
+            '.css': 'text/css',
+            '.json': 'application/json',
+            '.png': 'image/png',
+            '.jpg': 'image/jpg',
+            '.svg': 'image/svg+xml'
+        };
+        
+        const contentType = mimeTypes[ext] || 'application/octet-stream';
+        res.writeHead(200, { 'Content-Type': contentType });
+        const stream = fs.createReadStream(filePath);
+        stream.pipe(res);
+        stream.on('error', (streamErr) => {
+            if (!res.headersSent) {
+                res.writeHead(500);
+                res.end('Server Error');
             }
         });
+    });
 
-        if (req.method !== 'GET' && req.method !== 'HEAD') {
-            req.pipe(proxyReq);
-        } else {
-            proxyReq.end();
-        }
-    } catch (err) {
-        console.error('Proxy Error:', err.message);
-        if (!res.headersSent) {
-            res.writeHead(500);
-            res.end(JSON.stringify({ error: 'Proxy error: ' + err.message }));
-        } else {
-            res.end();
-        }
-    }
 }).listen(PORT, () => {
     console.log(`\n🚀 TeleShare Proxy running on port ${PORT}`);
 });
