@@ -57,7 +57,7 @@ http.createServer(async (req, res) => {
             }
 
             const media = messages[0].media;
-            const fileSize = size || (media.document ? media.document.size : 0);
+            const fileSize = (size || (media.document ? media.document.size : 0)).toString();
 
             res.writeHead(200, {
                 'Content-Type': 'application/octet-stream',

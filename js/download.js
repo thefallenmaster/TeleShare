@@ -258,7 +258,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 // ── Phase 1: Download with real streaming progress ──────────
                 let fetchUrl = fileUrl;
-                if (CONFIG.CORS_PROXY) {
+                if (CONFIG.CORS_PROXY && !fileUrl.includes('/api/stream')) {
                     if (CONFIG.CORS_PROXY.includes('corsproxy.io')) {
                         fetchUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(fileUrl)}`;
                     } else {
