@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { TelegramClient } = require("telegram");
 const { StringSession } = require("telegram/sessions");
+const { createClient } = require('@supabase/supabase-js');
 
 const PORT = process.env.PORT || 8081;
 const rootDir = path.join(__dirname, '..');
@@ -90,6 +91,97 @@ http.createServer(async (req, res) => {
         return;
     }
 
+    // Supabase Metadata Endpoint for Render
+    if (parsedUrl.pathname === '/api/metadata') {
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_ANON_KEY;
+        
+        if (!supabaseUrl || !supabaseKey) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Supabase credentials missing in Render Environment Variables.' }));
+            return;
+        }
+
+        const supabase = createClient(supabaseUrl, supabaseKey);
+
+        if (req.method === 'GET') {
+            const id = parsedUrl.query.id;
+            if (!id) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: 'Missing id parameter' }));
+                return;
+            }
+            try {
+                const { data, error } = await supabase.from('skyshare_files').select('*').eq('id', id).single();
+                if (error || !data) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'File not found' }));
+                } else {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify(data));
+                }
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message }));
+            }
+            return;
+        }
+
+        if (req.method === 'PATCH') {
+            let body = '';
+            req.on('data', chunk => body += chunk.toString());
+            req.on('end', async () => {
+                try {
+                    const { id } = JSON.parse(body);
+                    if (!id) {
+                        res.writeHead(400, { 'Content-Type': 'application/json' });
+                        return res.end(JSON.stringify({ error: 'Missing id parameter' }));
+                    }
+                    const { data: file, error: fetchError } = await supabase.from('skyshare_files').select('downloads_count').eq('id', id).single();
+                    if (fetchError || !file) {
+                        res.writeHead(404, { 'Content-Type': 'application/json' });
+                        return res.end(JSON.stringify({ error: 'File not found' }));
+                    }
+                    const newCount = (file.downloads_count || 0) + 1;
+                    const { error: updateError } = await supabase.from('skyshare_files').update({ downloads_count: newCount }).eq('id', id);
+                    if (updateError) throw updateError;
+                    
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ downloads_count: newCount }));
+                } catch (err) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: err.message }));
+                }
+            });
+            return;
+        }
+
+        if (req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => body += chunk.toString());
+            req.on('end', async () => {
+                try {
+                    const { telegram_file_id, telegram_message_id, file_name, file_size, mime_type } = JSON.parse(body);
+                    const { data, error } = await supabase.from('skyshare_files').insert([{
+                        telegram_file_id, telegram_message_id, file_name, file_size, mime_type, downloads_count: 0
+                    }]).select();
+                    
+                    if (error) throw error;
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify(data));
+                } catch (err) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: err.message }));
+                }
+            });
+            return;
+        }
+
+        res.writeHead(405, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Method not allowed' }));
+        return;
+    }
+
     // Standard Proxy Logic
     if (parsedUrl.pathname === '/api/proxy' || parsedUrl.query.url) {
         let targetUrl = parsedUrl.query.url;
@@ -108,8 +200,16 @@ http.createServer(async (req, res) => {
         }
 
         if (!targetUrl || !targetUrl.startsWith('http')) {
-            res.writeHead(400);
+            res.writeHead(400, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Invalid target URL. Must start with http.' }));
+            return;
+        }
+
+        if (targetUrl.includes('BOT_TOKEN_PLACEHOLDER') || targetUrl.includes('undefined')) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ 
+                error: 'Server Configuration Error: TELEGRAM_BOT_TOKEN is missing or invalid. Please check your Render Environment Variables.' 
+            }));
             return;
         }
 
