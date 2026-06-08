@@ -68,23 +68,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             telegramFileId = paramId;
             telegramMessageId = paramMsg;
             
-            if (CONFIG.TELEGRAM_BOT_TOKEN === 'YOUR_TELEGRAM_BOT_TOKEN' || telegramFileId.startsWith('mock_file_id')) {
-                mockMetadata();
-            } else {
-                // Fetch using Telegram Bot API directly
-                await fetchTelegramMetadataDirectly();
-            }
+            await fetchTelegramMetadataDirectly();
         } else {
             // Supabase link flow (id is Supabase row ID)
-            if (supabaseClient) {
-                const { data, error } = await supabaseClient
-                    .from('skyshare_files')
-                    .select('*')
-                    .eq('id', paramId)
-                    .single();
+            try {
+                const response = await fetch(`${CONFIG.METADATA_API}?id=${paramId}`);
+                const data = await response.json();
                 
-                if (error || !data) {
-                    console.error('Failed to fetch file info from Supabase:', error);
+                if (!response.ok || !data || data.error) {
+                    console.error('Failed to fetch file info from Backend:', data?.error || response.statusText);
                     showError();
                     return;
                 }
@@ -98,15 +90,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                 dlFileName.textContent = originalFileName;
                 dlFileSize.textContent = formatBytes(fileSize);
                 dlUploadDate.textContent = new Date(data.created_at).toLocaleDateString();
-                dlDownloadCount.textContent = '1';
+                dlDownloadCount.textContent = data.downloads_count || '0';
 
-                if (CONFIG.TELEGRAM_BOT_TOKEN === 'YOUR_TELEGRAM_BOT_TOKEN' || (telegramFileId && telegramFileId.startsWith('mock_file_id'))) {
-                    mockMetadata();
-                } else {
-                    await fetchTelegramMetadataDirectly();
-                }
-            } else {
-                console.error('Supabase client not initialized and legacy msg parameter is missing.');
+                await fetchTelegramMetadataDirectly();
+            } catch (err) {
+                console.error('Backend metadata fetch failed.', err);
                 showError();
                 return;
             }
@@ -118,8 +106,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     async function fetchTelegramMetadataDirectly() {
         try {
-            const getFileUrl = `${CONFIG.TELEGRAM_API_BASE}/bot${CONFIG.TELEGRAM_BOT_TOKEN}/getFile?file_id=${telegramFileId}`;
-            const fetchUrl = CONFIG.CORS_PROXY ? `${CONFIG.CORS_PROXY}${encodeURIComponent(getFileUrl)}` : getFileUrl;
+            const getFileUrl = `https://api.telegram.org/botBOT_TOKEN_PLACEHOLDER/getFile?file_id=${telegramFileId}`;
+            const fetchUrl = `${CONFIG.CORS_PROXY}${encodeURIComponent(getFileUrl)}`;
             
             const response = await fetch(fetchUrl);
             const responseText = await response.text();
@@ -141,7 +129,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Fallback to our proxy MTProto streaming endpoint for large files
                 if (data.description && data.description.includes('too big')) {
                     console.log('File >20MB. Falling back to proxy MTProto stream.');
-                    directFilePath = `${CONFIG.STREAM_API}?msg_id=${telegramMessageId}&chat_id=${encodeURIComponent(CONFIG.TELEGRAM_CHAT_ID)}&bot_token=${encodeURIComponent(CONFIG.TELEGRAM_BOT_TOKEN)}`;
+                    directFilePath = `${CONFIG.STREAM_API}?msg_id=${telegramMessageId}`;
                 } else {
                     showNotification('Failed to fetch file info: ' + data.description);
                 }
@@ -158,9 +146,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             
             const telegramFile = data.result;
-            directFilePath = `${CONFIG.TELEGRAM_API_BASE}/file/bot${CONFIG.TELEGRAM_BOT_TOKEN}/${telegramFile.file_path}`;
+            const directFileUrl = `https://api.telegram.org/file/botBOT_TOKEN_PLACEHOLDER/${telegramFile.file_path}`;
+            directFilePath = `${CONFIG.CORS_PROXY}${encodeURIComponent(directFileUrl)}`;
             
-            // If metadata wasn't loaded from Supabase, update placeholders
+            // If metadata wasn't loaded from Backend, update placeholders
             if (!fileSize) {
                 dlFileName.textContent = 'Secure Encrypted File';
                 dlFileSize.textContent = formatBytes(telegramFile.file_size);
@@ -404,7 +393,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             downloadBtn.innerHTML = originalBtnContent;
 
             const currentCount = parseInt(dlDownloadCount.textContent) || 0;
-            dlDownloadCount.textContent = (currentCount + 1).toString();
+            const nextCount = currentCount + 1;
+            dlDownloadCount.textContent = nextCount.toString();
+            
+            // Increment in the database
+            if (paramId) {
+                fetch(CONFIG.METADATA_API, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id: paramId })
+                }).catch(err => console.error('Failed to increment download count:', err));
+            }
 
             showNotification('File downloaded and decrypted successfully!');
 

@@ -57,46 +57,18 @@ function copyToClipboard(text) {
     });
 }
 
-// Configuration for Telegram Bot API and Supabase (Decrypted at runtime)
-const OBFUSCATION_KEY = 'skyshare-secret-key-2026';
-function decryptConfigValue(encodedText) {
-    if (!encodedText || encodedText === 'YOUR_TELEGRAM_BOT_TOKEN' || encodedText === 'YOUR_SUPABASE_URL' || encodedText === 'YOUR_SUPABASE_ANON_KEY') {
-        return encodedText;
-    }
-    try {
-        const raw = atob(encodedText);
-        let decoded = "";
-        for (let i = 0; i < raw.length; i++) {
-            decoded += String.fromCharCode(raw.charCodeAt(i) ^ OBFUSCATION_KEY.charCodeAt(i % OBFUSCATION_KEY.length));
-        }
-        return decoded;
-    } catch (e) {
-        console.error('Decryption failed for config value:', e);
-        return encodedText;
-    }
-}
-
+// Configuration for Backend Endpoints
 const CONFIG = {
-    TELEGRAM_BOT_TOKEN: decryptConfigValue('S1JNQlBRQFAZRl8iMyImFFM3PElRSHhvOC8dFDwAMwJqPhFOKyQtVRMnPEBFQw=='),
-    TELEGRAM_CHAT_ID: decryptConfigValue('Mx8cABwTGBdHAwIB'),
-    TELEGRAM_API_BASE: 'https://api.telegram.org', // Change to your local Bot API server URL for 2GB support
     CORS_PROXY: (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || !window.location.hostname)
         ? 'http://localhost:8081/?url='
         : '/api/proxy?url=',
     STREAM_API: (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || !window.location.hostname)
         ? 'http://localhost:8081/api/stream'
         : '/api/stream',
-
-    // Supabase Credentials
-    SUPABASE_URL: decryptConfigValue('Gx8NAxtbXUpPGB8HCBIbVQQDDlRTVENHAg8eCUYSBxVMEQQQF0sXQg=='),
-    SUPABASE_ANON_KEY: decryptConfigValue('AAkmAx0DHgxeGwQBHgArezMwLGZid353Xl0OCzsmHABdIwwgFToTdBtISlcFBQ==')
+    METADATA_API: (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || !window.location.hostname)
+        ? 'http://localhost:8081/api/metadata'
+        : '/api/metadata',
 };
-
-// Initialize Supabase Client if credentials are provided
-let supabaseClient = null;
-if (typeof supabase !== 'undefined' && CONFIG.SUPABASE_URL && CONFIG.SUPABASE_URL !== 'YOUR_SUPABASE_URL' && CONFIG.SUPABASE_ANON_KEY && CONFIG.SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY') {
-    supabaseClient = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
-}
 
 // Client-Side AES Encryption/Decryption using Web Crypto API
 async function generateEncryptionKey() {

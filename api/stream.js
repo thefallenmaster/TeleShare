@@ -1,3 +1,4 @@
+require('dotenv').config();
 const { TelegramClient } = require("telegram");
 const { StringSession } = require("telegram/sessions");
 
@@ -27,14 +28,14 @@ export default async function handler(req, res) {
         return;
     }
 
-    const { msg_id, chat_id, bot_token } = req.query;
-    if (!msg_id || !chat_id || !bot_token) {
-        return res.status(400).json({ error: 'Missing msg_id, chat_id, or bot_token' });
+    const { msg_id } = req.query;
+    if (!msg_id) {
+        return res.status(400).json({ error: 'Missing msg_id' });
     }
 
     try {
-        const client = await getTelegramClient(bot_token);
-        const messages = await client.getMessages(chat_id, { ids: [parseInt(msg_id, 10)] });
+        const client = await getTelegramClient(process.env.TELEGRAM_BOT_TOKEN);
+        const messages = await client.getMessages(process.env.TELEGRAM_CHAT_ID, { ids: [parseInt(msg_id, 10)] });
         
         if (!messages || messages.length === 0 || !messages[0].media) {
             return res.status(404).json({ error: 'Message or media not found' });

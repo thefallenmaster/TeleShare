@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 export const config = {
     api: {
         bodyParser: false,
@@ -25,6 +27,14 @@ export default function handler(req, res) {
         
         if (targetUrl) {
             targetUrl = targetUrl.replace(/^(https?):\/([^\/])/, '$1://$2');
+            
+            // Server-Side Injection of Secrets
+            if (targetUrl.includes('api.telegram.org')) {
+                const apiBase = process.env.TELEGRAM_API_BASE || 'https://api.telegram.org';
+                targetUrl = targetUrl.replace('https://api.telegram.org', apiBase);
+                targetUrl = targetUrl.replace('BOT_TOKEN_PLACEHOLDER', process.env.TELEGRAM_BOT_TOKEN);
+                targetUrl = targetUrl.replace('CHAT_ID_PLACEHOLDER', process.env.TELEGRAM_CHAT_ID);
+            }
         }
 
         if (!targetUrl || !targetUrl.startsWith('http')) {

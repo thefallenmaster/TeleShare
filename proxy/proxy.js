@@ -1,3 +1,4 @@
+require('dotenv').config();
 const http = require('http');
 const https = require('https');
 const url = require('url');
@@ -39,16 +40,16 @@ http.createServer(async (req, res) => {
 
     // New Direct Stream Endpoint to bypass 20MB limit
     if (parsedUrl.pathname === '/api/stream') {
-        const { msg_id, chat_id, bot_token, size } = parsedUrl.query;
-        if (!msg_id || !chat_id || !bot_token) {
+        const { msg_id, size } = parsedUrl.query;
+        if (!msg_id) {
             res.writeHead(400);
-            res.end(JSON.stringify({ error: 'Missing msg_id, chat_id, or bot_token' }));
+            res.end(JSON.stringify({ error: 'Missing msg_id' }));
             return;
         }
 
         try {
-            const client = await getTelegramClient(bot_token);
-            const messages = await client.getMessages(chat_id, { ids: [parseInt(msg_id, 10)] });
+            const client = await getTelegramClient(process.env.TELEGRAM_BOT_TOKEN);
+            const messages = await client.getMessages(process.env.TELEGRAM_CHAT_ID, { ids: [parseInt(msg_id, 10)] });
             
             if (!messages || messages.length === 0 || !messages[0].media) {
                 res.writeHead(404);
@@ -95,6 +96,15 @@ http.createServer(async (req, res) => {
         
         if (targetUrl) {
             targetUrl = targetUrl.replace(/^(https?):\/([^\/])/, '$1://$2');
+            
+            // Server-Side Injection of Secrets
+            if (targetUrl.includes('api.telegram.org')) {
+                // The frontend now sends literal strings to be replaced
+                const apiBase = process.env.TELEGRAM_API_BASE || 'https://api.telegram.org';
+                targetUrl = targetUrl.replace('https://api.telegram.org', apiBase);
+                targetUrl = targetUrl.replace('BOT_TOKEN_PLACEHOLDER', process.env.TELEGRAM_BOT_TOKEN);
+                targetUrl = targetUrl.replace('CHAT_ID_PLACEHOLDER', process.env.TELEGRAM_CHAT_ID);
+            }
         }
 
         if (!targetUrl || !targetUrl.startsWith('http')) {

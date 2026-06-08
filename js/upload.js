@@ -114,20 +114,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const formData = new FormData();
-        formData.append('chat_id', CONFIG.TELEGRAM_CHAT_ID);
+        // The proxy will inject chat_id and bot_token
         formData.append('document', fileToUpload, `${selectedFile.name}.enc`);
         
-        const url = `${CONFIG.TELEGRAM_API_BASE}/bot${CONFIG.TELEGRAM_BOT_TOKEN}/sendDocument`;
-        const uploadUrl = CONFIG.CORS_PROXY ? `${CONFIG.CORS_PROXY}${encodeURIComponent(url)}` : url;
+        const telegramUrl = `https://api.telegram.org/botBOT_TOKEN_PLACEHOLDER/sendDocument?chat_id=CHAT_ID_PLACEHOLDER`;
+        const uploadUrl = `${CONFIG.CORS_PROXY}${encodeURIComponent(telegramUrl)}`;
 
-        // DEMO MOCKUP FALLBACK
-        if (CONFIG.TELEGRAM_BOT_TOKEN === 'YOUR_TELEGRAM_BOT_TOKEN') {
-            console.warn('Mocking upload because Telegram Bot token is missing.');
-            mockUpload(exportedKey);
-            return;
-        }
-
-        console.log('Uploading to:', uploadUrl);
+        console.log('Uploading securely via proxy:', uploadUrl);
 
         // ── XHR upload (only API that gives real per-chunk progress events) ──
         let res;
@@ -200,10 +193,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const messageId = res.result.message_id;
 
             // Edit the message caption to include the file ID and metadata
-            const editUrl       = `${CONFIG.TELEGRAM_API_BASE}/bot${CONFIG.TELEGRAM_BOT_TOKEN}/editMessageCaption`;
-            const proxiedEditUrl = CONFIG.CORS_PROXY ? `${CONFIG.CORS_PROXY}${encodeURIComponent(editUrl)}` : editUrl;
+            const editUrl       = `https://api.telegram.org/botBOT_TOKEN_PLACEHOLDER/editMessageCaption?chat_id=CHAT_ID_PLACEHOLDER`;
+            const proxiedEditUrl = `${CONFIG.CORS_PROXY}${encodeURIComponent(editUrl)}`;
             const editFormData  = new FormData();
-            editFormData.append('chat_id',    CONFIG.TELEGRAM_CHAT_ID);
             editFormData.append('message_id', messageId);
             editFormData.append('caption',    `File ID: ${fileId}\nSize: ${formatBytes(selectedFile.size)}\nUpload Date: ${new Date().toLocaleDateString()}`);
 
@@ -213,28 +205,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 .catch(err => console.error('Failed to update caption:', err));
 
             const uploadStatus = document.getElementById('upload-status');
-            if (supabaseClient) {
-                if (uploadStatus) uploadStatus.textContent = 'Saving details to database...';
-                supabaseClient.from('skyshare_files').insert([{
+            if (uploadStatus) uploadStatus.textContent = 'Saving details to database...';
+            
+            fetch(CONFIG.METADATA_API, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
                     telegram_file_id:   fileId,
                     telegram_message_id: messageId,
                     file_name:  selectedFile.name,
                     file_size:  selectedFile.size,
                     mime_type:  selectedFile.type
-                }]).select().then(({ data, error }) => {
-                    if (error || !data || data.length === 0) {
-                        console.error('Supabase save error:', error);
-                        generateShareLink(fileId, messageId, exportedKey);
-                    } else {
-                        generateShareLink(null, null, exportedKey, data[0].id);
-                    }
-                }).catch(err => {
-                    console.error('Supabase save exception:', err);
-                    generateShareLink(fileId, messageId, exportedKey);
-                });
-            } else {
-                generateShareLink(fileId, messageId, exportedKey);
-            }
+                })
+            }).then(r => r.json())
+              .then(data => {
+                  if (data.error || !data || data.length === 0) {
+                      console.error('Backend save error:', data.error);
+                      generateShareLink(fileId, messageId, exportedKey);
+                  } else {
+                      generateShareLink(null, null, exportedKey, data[0].id);
+                  }
+              }).catch(err => {
+                  console.error('Backend save exception:', err);
+                  generateShareLink(fileId, messageId, exportedKey);
+              });
         } else {
             handleUploadError(res.description || 'Telegram API returned an error.');
         }
