@@ -41,6 +41,14 @@ export default function handler(req, res) {
             res.status(400).json({ error: 'Invalid target URL. Must start with http.' });
             return resolve();
         }
+        
+        if (targetUrl.includes('BOT_TOKEN_PLACEHOLDER') || targetUrl.includes('undefined')) {
+            // Means it failed to replace properly because process.env was undefined
+            res.status(500).json({ 
+                error: 'Server Configuration Error: TELEGRAM_BOT_TOKEN is missing. If you are on Vercel, please add it to your Project Settings -> Environment Variables.' 
+            });
+            return resolve();
+        }
 
         const targetUrlParsed = new URL(targetUrl);
         const protocol = targetUrlParsed.protocol === 'https:' ? require('https') : require('http');

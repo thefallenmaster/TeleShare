@@ -16,6 +16,12 @@ export default async function handler(req, res) {
         return;
     }
 
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
+        return res.status(500).json({ 
+            error: 'Server Configuration Error: Supabase credentials are missing. If you are on Vercel, please add SUPABASE_URL and SUPABASE_ANON_KEY to your Project Settings -> Environment Variables.' 
+        });
+    }
+
     if (req.method === 'POST') {
         // Insert metadata
         const { telegram_file_id, telegram_message_id, file_name, file_size, mime_type } = req.body;
