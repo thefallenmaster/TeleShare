@@ -146,8 +146,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             
             const telegramFile = data.result;
-            const directFileUrl = `https://api.telegram.org/file/botBOT_TOKEN_PLACEHOLDER/${telegramFile.file_path}`;
-            directFilePath = `${CONFIG.CORS_PROXY}${encodeURIComponent(directFileUrl)}`;
+            directFilePath = `https://api.telegram.org/file/botBOT_TOKEN_PLACEHOLDER/${telegramFile.file_path}`;
             
             // If metadata wasn't loaded from Backend, update placeholders
             if (!fileSize) {
