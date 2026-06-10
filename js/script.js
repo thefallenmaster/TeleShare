@@ -88,7 +88,11 @@ async function exportKeyToBase64(key) {
 }
 
 async function importKeyFromBase64(base64) {
-    const str = atob(base64.replace(/-/g, '+').replace(/_/g, '/'));
+    let strBase64 = base64.replace(/-/g, '+').replace(/_/g, '/');
+    while (strBase64.length % 4 !== 0) {
+        strBase64 += '=';
+    }
+    const str = atob(strBase64);
     const bytes = new Uint8Array(str.length);
     for (let i = 0; i < str.length; i++) {
         bytes[i] = str.charCodeAt(i);
