@@ -128,7 +128,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 
                 // Fallback to our proxy MTProto streaming endpoint for large files
                 // or if it was uploaded via MTProto (where we return a mock file_id)
-                if ((data.description && data.description.includes('too big')) || (telegramFileId && telegramFileId.startsWith('mock_file_id')) || (data.description && data.description.includes('invalid'))) {
+                if ((data.description && data.description.includes('too big')) || (telegramFileId && (telegramFileId.startsWith('mock_file_id') || telegramFileId.startsWith('mtproto_file_'))) || (data.description && data.description.includes('invalid'))) {
                     console.log('Falling back to proxy MTProto stream.');
                     directFilePath = `${CONFIG.STREAM_API}?msg_id=${telegramMessageId}&size=${fileSize}`;
                 } else {

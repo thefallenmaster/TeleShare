@@ -218,7 +218,7 @@ http.createServer(async (req, res) => {
                     result: {
                         message_id: result.id,
                         document: {
-                            file_id: "mock_file_id" // file_id is not easily accessible from GramJS result, but not needed as we use message_id for download
+                            file_id: "mtproto_file_" + result.id + "_" + Math.random().toString(36).substring(2, 8)
                         }
                     }
                 }));
