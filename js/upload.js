@@ -132,6 +132,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     progressBar.style.width       = pct + '%';
                     uploadPercentage.textContent  = Math.round(pct) + '%';
 
+                    if (pct >= 100) {
+                        const uploadStatus = document.getElementById('upload-status');
+                        if (uploadStatus) uploadStatus.textContent = 'Processing on server...';
+                        uploadSpeedEl.textContent    = 'Please wait';
+                        uploadTimeLeftEl.textContent = 'Forwarding to Telegram...';
+                        return;
+                    }
+
                     const now     = Date.now();
                     const dtSec   = (now - lastTime) / 1000;
                     if (dtSec >= 0.25) {
