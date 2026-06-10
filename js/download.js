@@ -127,9 +127,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.error('Bot API getFile failed:', data.description);
                 
                 // Fallback to our proxy MTProto streaming endpoint for large files
-                if (data.description && data.description.includes('too big')) {
-                    console.log('File >20MB. Falling back to proxy MTProto stream.');
-                    directFilePath = `${CONFIG.STREAM_API}?msg_id=${telegramMessageId}`;
+                // or if it was uploaded via MTProto (where we return a mock file_id)
+                if ((data.description && data.description.includes('too big')) || telegramFileId === 'mock_file_id' || (data.description && data.description.includes('invalid'))) {
+                    console.log('Falling back to proxy MTProto stream.');
+                    directFilePath = `${CONFIG.STREAM_API}?msg_id=${telegramMessageId}&size=${fileSize}`;
                 } else {
                     showNotification('Failed to fetch file info: ' + data.description);
                 }

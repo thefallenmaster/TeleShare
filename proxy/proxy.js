@@ -182,6 +182,61 @@ http.createServer(async (req, res) => {
         return;
     }
 
+    // GramJS Upload Endpoint for large files (>50MB)
+    if (parsedUrl.pathname === '/api/upload' && req.method === 'POST') {
+        const fileName = decodeURIComponent(req.headers['x-file-name'] || 'file.enc');
+        const tmpPath = path.join('/tmp', `upload_${Date.now()}_${Math.random().toString(36).substring(7)}_${fileName}`);
+        const writeStream = fs.createWriteStream(tmpPath);
+        
+        req.pipe(writeStream);
+        
+        req.on('end', async () => {
+            try {
+                const client = await getTelegramClient(process.env.TELEGRAM_BOT_TOKEN);
+                const fileSize = fs.statSync(tmpPath).size;
+                console.log(`[UPLOAD] Received ${fileName} (${fileSize} bytes). Uploading via MTProto...`);
+                
+                const result = await client.sendFile(process.env.TELEGRAM_CHAT_ID, {
+                    file: tmpPath,
+                    forceDocument: true,
+                    workers: 4
+                });
+
+                if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+                
+                console.log(`[UPLOAD] Success: message_id=${result.id}`);
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    ok: true,
+                    result: {
+                        message_id: result.id,
+                        document: {
+                            file_id: "mock_file_id" // file_id is not easily accessible from GramJS result, but not needed as we use message_id for download
+                        }
+                    }
+                }));
+            } catch (err) {
+                console.error('[UPLOAD ERROR]', err.message);
+                if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+                if (!res.headersSent) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ description: err.message }));
+                } else res.end();
+            }
+        });
+        
+        req.on('error', (err) => {
+            console.error('[REQ ERROR]', err.message);
+            if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath);
+            if (!res.headersSent) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ description: err.message }));
+            }
+        });
+        return;
+    }
+
     // Standard Proxy Logic
     if (parsedUrl.pathname === '/api/proxy' || parsedUrl.query.url) {
         let targetUrl = parsedUrl.query.url;

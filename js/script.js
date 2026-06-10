@@ -68,6 +68,9 @@ const CONFIG = {
     METADATA_API: (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || !window.location.hostname)
         ? 'http://localhost:8081/api/metadata'
         : '/api/metadata',
+    UPLOAD_API: (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.protocol === 'file:' || !window.location.hostname)
+        ? 'http://localhost:8081/api/upload'
+        : '/api/upload',
 };
 
 // Client-Side AES Encryption/Decryption using Web Crypto API

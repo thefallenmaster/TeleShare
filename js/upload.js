@@ -113,14 +113,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const formData = new FormData();
-        // The proxy will inject chat_id and bot_token
-        formData.append('document', fileToUpload, `${selectedFile.name}.enc`);
-        
-        const telegramUrl = `https://api.telegram.org/botBOT_TOKEN_PLACEHOLDER/sendDocument?chat_id=CHAT_ID_PLACEHOLDER`;
-        const uploadUrl = `${CONFIG.CORS_PROXY}${encodeURIComponent(telegramUrl)}`;
+        const uploadUrl = CONFIG.UPLOAD_API;
 
-        console.log('Uploading securely via proxy:', uploadUrl);
+        console.log('Uploading securely via MTProto proxy:', uploadUrl);
 
         // ── XHR upload (only API that gives real per-chunk progress events) ──
         let res;
@@ -174,7 +169,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 xhr.addEventListener('abort', () => reject(new Error('Upload was cancelled.')));
 
                 xhr.open('POST', uploadUrl, true);
-                xhr.send(formData);
+                xhr.setRequestHeader('X-File-Name', encodeURIComponent(`${selectedFile.name}.enc`));
+                xhr.send(fileToUpload);
             });
         } catch (xhrErr) {
             console.error('XHR upload error:', xhrErr);
