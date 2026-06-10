@@ -113,9 +113,17 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const uploadUrl = CONFIG.UPLOAD_API;
+        let isDirect = false;
+        let uploadUrl;
+        if (selectedFile.size < 49 * 1024 * 1024) {
+            isDirect = true;
+            const telegramUrl = `https://api.telegram.org/botBOT_TOKEN_PLACEHOLDER/sendDocument?chat_id=CHAT_ID_PLACEHOLDER`;
+            uploadUrl = `${CONFIG.CORS_PROXY}${encodeURIComponent(telegramUrl)}`;
+        } else {
+            uploadUrl = CONFIG.UPLOAD_API;
+        }
 
-        console.log('Uploading securely via MTProto proxy:', uploadUrl);
+        console.log(`Uploading securely via ${isDirect ? 'HTTP Proxy' : 'MTProto proxy'}:`, uploadUrl);
 
         // ── XHR upload (only API that gives real per-chunk progress events) ──
         let res;
@@ -177,8 +185,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 xhr.addEventListener('abort', () => reject(new Error('Upload was cancelled.')));
 
                 xhr.open('POST', uploadUrl, true);
-                xhr.setRequestHeader('X-File-Name', encodeURIComponent(`${selectedFile.name}.enc`));
-                xhr.send(fileToUpload);
+                if (isDirect) {
+                    const formData = new FormData();
+                    formData.append('document', fileToUpload, `${selectedFile.name}.enc`);
+                    xhr.send(formData);
+                } else {
+                    xhr.setRequestHeader('X-File-Name', encodeURIComponent(`${selectedFile.name}.enc`));
+                    xhr.send(fileToUpload);
+                }
             });
         } catch (xhrErr) {
             console.error('XHR upload error:', xhrErr);
