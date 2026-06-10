@@ -184,6 +184,12 @@ http.createServer(async (req, res) => {
 
     // GramJS Upload Endpoint for large files (>50MB)
     if (parsedUrl.pathname === '/api/upload' && req.method === 'POST') {
+        if (!process.env.TELEGRAM_CHAT_ID || !process.env.TELEGRAM_BOT_TOKEN) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ description: 'Server Configuration Error: TELEGRAM_CHAT_ID or TELEGRAM_BOT_TOKEN is missing in your Environment Variables. Please set them.' }));
+            return;
+        }
+        
         const fileName = decodeURIComponent(req.headers['x-file-name'] || 'file.enc');
         const tmpPath = path.join('/tmp', `upload_${Date.now()}_${Math.random().toString(36).substring(7)}_${fileName}`);
         const writeStream = fs.createWriteStream(tmpPath);
